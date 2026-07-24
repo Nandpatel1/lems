@@ -5,7 +5,13 @@ import { Bell } from "lucide-react";
 import type { AppNotification } from "@/lib/data";
 import { markNotificationsRead } from "@/app/actions";
 
-export default function NotificationsBell({ items }: { items: AppNotification[] }) {
+export default function NotificationsBell({
+  items,
+  placement = "sidebar",
+}: {
+  items: AppNotification[];
+  placement?: "sidebar" | "header";
+}) {
   const [open, setOpen] = useState(false);
   const [cleared, setCleared] = useState(false);
   const [, startTransition] = useTransition();
@@ -39,8 +45,19 @@ export default function NotificationsBell({ items }: { items: AppNotification[] 
       </button>
 
       {open && (
-        <div className="absolute bottom-8 right-0 z-50 w-72 rounded-card border border-hair bg-surface p-2 shadow-sm">
-          <p className="px-2 py-1 text-[11px] text-ink-3">Notifications</p>
+        <>
+          <button
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div
+            className={`absolute z-50 w-72 rounded-card border border-hair bg-surface p-2 shadow-sm ${
+              placement === "header" ? "top-8 right-0" : "bottom-8 left-0"
+            }`}
+          >
+            <p className="px-2 py-1 text-[11px] text-ink-3">Notifications</p>
           {items.length === 0 ? (
             <p className="px-2 py-4 text-center text-[12px] text-ink-3">
               You&apos;re all caught up.
@@ -70,7 +87,8 @@ export default function NotificationsBell({ items }: { items: AppNotification[] 
               ))}
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

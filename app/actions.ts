@@ -128,6 +128,18 @@ export async function assignResourceToMember(
     .single();
   if (error || !r) return { ok: false, error: error?.message ?? "Resource not found" };
 
+  // Dedup: don't create a duplicate if this person already has it active.
+  const { data: existing } = await db
+    .from("tasks")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("title", r.title)
+    .neq("state", "complete")
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return { ok: true };
+  }
+
   const { data: task, error: taskErr } = await db
     .from("tasks")
     .insert({

@@ -32,7 +32,7 @@ export default async function AppLayout({
             <span className="text-[14px] font-medium text-ink">Launchpad</span>
           </div>
           <div className="flex items-center gap-3">
-            <NotificationsBell items={notifications} />
+            <NotificationsBell items={notifications} placement="header" />
             <ThemeToggle />
             <Link
               href="/library"

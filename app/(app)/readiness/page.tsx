@@ -30,10 +30,11 @@ export default async function ReadinessPage() {
           </p>
         </div>
         <div className="rounded-card bg-surface-soft px-4 py-3">
-          <p className="text-[12px] text-ink-3">Applied this week</p>
+          <p className="text-[12px] text-ink-3">This week</p>
           <p className="text-[22px] font-medium text-accent-ink">
             {applied}
-            <span className="text-[14px] text-ink-3"> / {learned} learned</span>
+            <span className="text-[14px] text-ink-3"> applied</span>
+            <span className="text-[14px] text-ink-3"> · {learned} learned</span>
           </p>
         </div>
         <div className="rounded-card bg-surface-soft px-4 py-3">
@@ -105,9 +106,12 @@ export default async function ReadinessPage() {
             ))}
           </div>
           <p className="mt-4 rounded-control bg-surface-soft px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
-            You&apos;ve applied <span className="font-medium text-ship-ink">{applied}</span> of{" "}
-            <span className="font-medium text-accent-ink">{learned}</span> things you learned this
-            week. Confidence sits next to proof — that&apos;s how you know it&apos;s real.
+            This week you completed{" "}
+            <span className="font-medium text-accent-ink">{learned}</span>{" "}
+            {learned === 1 ? "learning item" : "learning items"} and shipped{" "}
+            <span className="font-medium text-ship-ink">{applied}</span>{" "}
+            {applied === 1 ? "real thing" : "real things"}. Confidence sits next to proof —
+            that&apos;s how you know it&apos;s real.
           </p>
         </section>
       </div>

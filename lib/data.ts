@@ -154,8 +154,13 @@ export async function getToday(): Promise<TodayData> {
     const milestones = mapMilestones(ms);
     const active = tasks.filter((t: any) => t.state !== "complete");
     const focusRow =
-      active.find((t: any) => t.type === "build" && t.state === "in_progress") ??
-      active.find((t: any) => t.state === "in_progress") ??
+      active.find(
+        (t: any) => t.type === "build" && t.state === "in_progress" && !t.is_folder
+      ) ??
+      active.find((t: any) => t.state === "in_progress" && !t.is_folder) ??
+      active.find(
+        (t: any) => t.type === "build" && t.state === "todo" && !t.is_folder
+      ) ??
       null;
     const focusTask = focusRow ? mapTask(focusRow) : null;
     const otherTasks = active
