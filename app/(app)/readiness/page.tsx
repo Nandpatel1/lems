@@ -1,17 +1,16 @@
 import { Check, Plus, Circle } from "lucide-react";
-import RoadToLaunch from "@/components/RoadToLaunch";
 import { getReadiness } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReadinessPage() {
-  const { readiness, milestones, confidences, learned, applied } = await getReadiness();
+  const { milestones, confidences, learned, applied } = await getReadiness();
+  const done = milestones.filter((m) => m.done).length;
   const avgConfidence =
     confidences.length === 0
       ? 0
       : Math.round((confidences.reduce((s, c) => s + c.score, 0) / confidences.length) * 10) /
         10;
-  const next = milestones.find((m) => m.current) ?? milestones.find((m) => !m.done);
 
   return (
     <div className="flex flex-col gap-5">
@@ -22,15 +21,36 @@ export default async function ReadinessPage() {
         </p>
       </div>
 
-      <RoadToLaunch
-        readiness={readiness}
-        milestones={milestones}
-        nextLabel={next ? next.label : "launch"}
-      />
+      <div className="flex flex-wrap gap-3">
+        <div className="rounded-card bg-surface-soft px-4 py-3">
+          <p className="text-[12px] text-ink-3">Launch areas done</p>
+          <p className="text-[22px] font-medium text-ship-ink">
+            {done}
+            <span className="text-[14px] text-ink-3"> / {milestones.length}</span>
+          </p>
+        </div>
+        <div className="rounded-card bg-surface-soft px-4 py-3">
+          <p className="text-[12px] text-ink-3">Applied this week</p>
+          <p className="text-[22px] font-medium text-accent-ink">
+            {applied}
+            <span className="text-[14px] text-ink-3"> / {learned} learned</span>
+          </p>
+        </div>
+        <div className="rounded-card bg-surface-soft px-4 py-3">
+          <p className="text-[12px] text-ink-3">How ready we feel</p>
+          <p className="text-[22px] font-medium text-ink">
+            {avgConfidence}
+            <span className="text-[14px] text-ink-3"> / 5</span>
+          </p>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-card border border-hair bg-surface p-4">
-          <h2 className="mb-3 text-[14px] font-medium text-ink">Launch milestones</h2>
+          <h2 className="mb-1 text-[14px] font-medium text-ink">Launch areas</h2>
+          <p className="mb-3 text-[11px] text-ink-3">
+            Tick these off in any order — no fixed sequence.
+          </p>
           <div className="flex flex-col">
             {milestones.map((m) => (
               <div
@@ -51,16 +71,11 @@ export default async function ReadinessPage() {
                 >
                   {m.label}
                 </span>
-                {m.current && (
-                  <span className="ml-auto rounded-chip bg-accent-tint px-2 py-0.5 text-[11px] text-accent-ink">
-                    in progress
-                  </span>
-                )}
               </div>
             ))}
           </div>
           <button className="mt-3 inline-flex items-center gap-1.5 rounded-control border border-hair-strong px-3 py-1.5 text-[12px] text-ink-2 transition-colors duration-quick hover:bg-surface-soft">
-            <Plus className="h-3.5 w-3.5" /> Add milestone
+            <Plus className="h-3.5 w-3.5" /> Add area
           </button>
         </section>
 

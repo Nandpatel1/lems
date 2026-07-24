@@ -5,8 +5,15 @@ import { Plus, X } from "lucide-react";
 import { addResource } from "@/app/actions";
 
 type FolderOpt = { id: string; name: string };
+type MemberOpt = { id: string; name: string };
 
-export default function AddResource({ folders }: { folders: FolderOpt[] }) {
+export default function AddResource({
+  folders,
+  members,
+}: {
+  folders: FolderOpt[];
+  members: MemberOpt[];
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +23,8 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
   const [folderId, setFolderId] = useState<string>(folders[0]?.id ?? "");
   const [source, setSource] = useState("");
   const [tags, setTags] = useState("");
-  const [addToQueue, setAddToQueue] = useState(false);
+  const [assignTo, setAssignTo] = useState<string>("");
+  const [deadline, setDeadline] = useState("");
 
   function reset() {
     setTitle("");
@@ -24,7 +32,8 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
     setFolderId(folders[0]?.id ?? "");
     setSource("");
     setTags("");
-    setAddToQueue(false);
+    setAssignTo("");
+    setDeadline("");
     setError(null);
   }
 
@@ -40,7 +49,8 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-        addToQueue,
+        assignTo: assignTo || null,
+        deadline: deadline || null,
       });
       if (res.ok) {
         reset();
@@ -133,15 +143,33 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
               className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
             />
 
-            <label className="mt-3 flex items-center gap-2 text-[13px] text-ink-2">
-              <input
-                type="checkbox"
-                checked={addToQueue}
-                onChange={(e) => setAddToQueue(e.target.checked)}
-                className="h-4 w-4 accent-[var(--accent)]"
-              />
-              Add it to my queue now
-            </label>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] text-ink-3">Assign to</label>
+                <select
+                  value={assignTo}
+                  onChange={(e) => setAssignTo(e.target.value)}
+                  className="mt-1 w-full rounded-control border border-hair bg-surface px-2 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                >
+                  <option value="">No one (library only)</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-ink-3">Deadline</label>
+                <input
+                  type="date"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  disabled={!assignTo}
+                  className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
+                />
+              </div>
+            </div>
 
             {error && <p className="mt-3 text-[12px] text-warm-ink">{error}</p>}
 

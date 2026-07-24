@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { Task } from "@/lib/types";
 import { completeLearn, markShipped } from "@/app/actions";
+import TaskDetailModal from "./TaskDetailModal";
 
 export default function TodayInteractive({
   focusTask,
@@ -27,6 +28,7 @@ export default function TodayInteractive({
   const [moment, setMoment] = useState<Task | null>(null);
   const [actionTitle, setActionTitle] = useState("");
   const [shipped, setShipped] = useState(false);
+  const [detail, setDetail] = useState<{ id: string; title: string } | null>(null);
 
   function openMoment(task: Task) {
     setActionTitle(`Apply what you learned: ${task.title}`);
@@ -77,7 +79,12 @@ export default function TodayInteractive({
               </span>
             )}
           </div>
-          <h2 className="text-[17px] font-medium text-ink">{focusTask.title}</h2>
+          <button
+            onClick={() => setDetail({ id: focusTask.id, title: focusTask.title })}
+            className="text-left text-[17px] font-medium text-ink transition-colors duration-quick hover:text-accent-ink"
+          >
+            {focusTask.title}
+          </button>
           {focusTask.note && (
             <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{focusTask.note}</p>
           )}
@@ -111,10 +118,24 @@ export default function TodayInteractive({
         <p className="mb-2 text-[11px] text-ink-3">Also on your plate</p>
         <div className="overflow-hidden rounded-card border border-hair bg-surface">
           {otherTasks.map((t) => (
-            <Row key={t.id} task={t} pending={pending} onComplete={() => onComplete(t)} />
+            <Row
+              key={t.id}
+              task={t}
+              pending={pending}
+              onComplete={() => onComplete(t)}
+              onOpen={() => setDetail({ id: t.id, title: t.title })}
+            />
           ))}
         </div>
       </div>
+
+      {detail && (
+        <TaskDetailModal
+          taskId={detail.id}
+          title={detail.title}
+          onClose={() => setDetail(null)}
+        />
+      )}
 
       {/* Turn-into-action moment */}
       {moment && (
@@ -180,10 +201,12 @@ function Row({
   task,
   pending,
   onComplete,
+  onOpen,
 }: {
   task: Task;
   pending: boolean;
   onComplete: () => void;
+  onOpen: () => void;
 }) {
   const canComplete = !task.isFolder && task.state !== "parked";
 
@@ -210,15 +233,14 @@ function Row({
         <span className="shrink-0">{leading}</span>
       )}
 
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-[13px] ${
-            task.state === "parked" ? "text-ink-2" : "text-ink"
-          }`}
-        >
-          {task.title}
-        </p>
-      </div>
+      <button
+        onClick={onOpen}
+        className={`min-w-0 flex-1 truncate text-left text-[13px] transition-colors duration-quick hover:text-accent-ink ${
+          task.state === "parked" ? "text-ink-2" : "text-ink"
+        }`}
+      >
+        {task.title}
+      </button>
 
       {task.overdue && <span className="shrink-0 text-[11px] text-warm-ink">overdue</span>}
 

@@ -1,14 +1,16 @@
 import { Folder, ListOrdered, ExternalLink } from "lucide-react";
 import TypeChip from "@/components/TypeChip";
 import AddResource from "@/components/AddResource";
+import AssignResource from "@/components/AssignResource";
 import { allTags } from "@/lib/seed";
-import { getLibrary } from "@/lib/data";
+import { getLibrary, getProfiles } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
-  const libraryFolders = await getLibrary();
+  const [libraryFolders, profiles] = await Promise.all([getLibrary(), getProfiles()]);
   const folderOpts = libraryFolders.map((f) => ({ id: f.id, name: f.name }));
+  const members = profiles.map((p) => ({ id: p.id, name: p.name }));
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
@@ -18,7 +20,7 @@ export default async function LibraryPage() {
             Your shared knowledge base — organize it however works, reshape it anytime.
           </p>
         </div>
-        <AddResource folders={folderOpts} />
+        <AddResource folders={folderOpts} members={members} />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -69,8 +71,11 @@ export default async function LibraryPage() {
                     </div>
                   </div>
                   {r.effortMin && (
-                    <span className="shrink-0 text-[11px] text-ink-3">≈ {r.effortMin}m</span>
+                    <span className="hidden shrink-0 text-[11px] text-ink-3 sm:inline">
+                      ≈ {r.effortMin}m
+                    </span>
                   )}
+                  <AssignResource resourceId={r.id} members={members} />
                 </div>
               ))}
             </div>

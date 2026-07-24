@@ -1,4 +1,3 @@
-import RoadToLaunch from "@/components/RoadToLaunch";
 import RatioChip from "@/components/RatioChip";
 import TodayInteractive from "@/components/TodayInteractive";
 import { getToday } from "@/lib/data";
@@ -14,7 +13,7 @@ export default async function TodayPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h1 className="text-[20px] font-medium text-ink">
@@ -26,12 +25,6 @@ export default async function TodayPage() {
         </div>
         <RatioChip learned={data.learned} applied={data.applied} />
       </div>
-
-      <RoadToLaunch
-        readiness={data.readiness}
-        milestones={data.milestones}
-        nextLabel={data.nextLabel}
-      />
 
       <TodayInteractive focusTask={data.focusTask} otherTasks={data.otherTasks} />
 
