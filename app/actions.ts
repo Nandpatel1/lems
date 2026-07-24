@@ -21,26 +21,34 @@ function revalidateAll() {
   revalidatePath("/library");
 }
 
-/** Complete a learn item. Optionally spawn a real-world action (the turn-into-action moment). */
-export async function completeLearn(
+/** Mark a task done, with an optional brief of what got done (saved to its notes).
+ *  Build tasks also count as "applied" (shipped real work). */
+export async function completeTask(
   taskId: string,
-  actionTitle?: string
+  brief?: string
 ): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
 
-  const { error } = await db.from("tasks").update({ state: "complete" }).eq("id", taskId);
-  if (error) return { ok: false, error: error.message };
+  const { data: t } = await db
+    .from("tasks")
+    .select("type, note")
+    .eq("id", taskId)
+    .single();
 
-  if (actionTitle && actionTitle.trim()) {
-    const { error: insErr } = await db.from("tasks").insert({
-      owner_id: await currentUid(),
-      title: actionTitle.trim(),
-      type: "build",
-      state: "todo",
-    });
-    if (insErr) return { ok: false, error: insErr.message };
-  }
+  const applied = t?.type === "build";
+  const trimmed = brief?.trim();
+  const note = trimmed
+    ? t?.note
+      ? `${t.note}\n\nDone: ${trimmed}`
+      : `Done: ${trimmed}`
+    : t?.note ?? null;
+
+  const { error } = await db
+    .from("tasks")
+    .update({ state: "complete", applied, note })
+    .eq("id", taskId);
+  if (error) return { ok: false, error: error.message };
 
   revalidateAll();
   return { ok: true };
@@ -241,17 +249,4 @@ export async function markNotificationsRead(): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Mark a build/action task as shipped for real — the moment readiness moves. */
-export async function markShipped(taskId: string): Promise<ActionResult> {
-  const db = supabaseAdmin();
-  if (!db) return { ok: false, error: "Supabase not configured" };
-
-  const { error } = await db
-    .from("tasks")
-    .update({ state: "complete", applied: true })
-    .eq("id", taskId);
-  if (error) return { ok: false, error: error.message };
-
-  revalidateAll();
-  return { ok: true };
-}
+// (markShipped removed — completion is unified in completeTask above.)

@@ -123,20 +123,21 @@ function computeReadiness(ms: Milestone[]): number {
   return Math.round(((done + 0.5 * current) / ms.length) * 100);
 }
 
-function nextLabel(ms: Milestone[]): string {
-  const next = ms.find((m) => m.current) ?? ms.find((m) => !m.done);
-  return next ? next.label : "launch";
-}
-
 export interface TodayData {
   founderName: string;
-  readiness: number;
-  milestones: Milestone[];
-  nextLabel: string;
-  focusTask: Task | null;
-  otherTasks: Task[];
   learned: number;
   applied: number;
+  tasks: Task[];
+}
+
+function byDeadline(a: any, b: any): number {
+  // Parked tasks sink to the bottom; otherwise soonest deadline first, no-deadline last.
+  const pa = a.state === "parked" ? 1 : 0;
+  const pb = b.state === "parked" ? 1 : 0;
+  if (pa !== pb) return pa - pb;
+  const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+  const db2 = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+  return da - db2;
 }
 
 export async function getToday(): Promise<TodayData> {
@@ -144,28 +145,14 @@ export async function getToday(): Promise<TodayData> {
   try {
     if (!db) throw new Error("no-db");
     const uid = await currentUid();
-    const [{ data: profile }, { data: ms }, { data: tasks }] = await Promise.all([
+    const [{ data: profile }, { data: tasks }] = await Promise.all([
       db.from("profiles").select("name").eq("id", uid).single(),
-      db.from("milestones").select("*"),
       db.from("tasks").select("*").eq("owner_id", uid),
     ]);
-    if (!ms || !tasks) throw new Error("empty");
+    if (!tasks) throw new Error("empty");
 
-    const milestones = mapMilestones(ms);
     const active = tasks.filter((t: any) => t.state !== "complete");
-    const focusRow =
-      active.find(
-        (t: any) => t.type === "build" && t.state === "in_progress" && !t.is_folder
-      ) ??
-      active.find((t: any) => t.state === "in_progress" && !t.is_folder) ??
-      active.find(
-        (t: any) => t.type === "build" && t.state === "todo" && !t.is_folder
-      ) ??
-      null;
-    const focusTask = focusRow ? mapTask(focusRow) : null;
-    const otherTasks = active
-      .filter((t: any) => t.id !== focusRow?.id)
-      .map(mapTask);
+    active.sort(byDeadline);
     const learned = tasks.filter(
       (t: any) => t.type === "learn" && t.state === "complete"
     ).length;
@@ -173,24 +160,16 @@ export async function getToday(): Promise<TodayData> {
 
     return {
       founderName: profile?.name ?? seed.founder.name,
-      readiness: computeReadiness(milestones),
-      milestones,
-      nextLabel: nextLabel(milestones),
-      focusTask,
-      otherTasks,
       learned,
       applied,
+      tasks: active.map(mapTask),
     };
   } catch {
     return {
       founderName: seed.founder.name,
-      readiness: seed.readiness,
-      milestones: seed.milestones,
-      nextLabel: "ship the brand logo",
-      focusTask: seed.focusTask,
-      otherTasks: seed.otherTasks,
       learned: seed.learnedThisWeek,
       applied: seed.appliedThisWeek,
+      tasks: [seed.focusTask, ...seed.otherTasks],
     };
   }
 }

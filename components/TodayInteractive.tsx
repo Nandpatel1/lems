@@ -1,138 +1,56 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Play,
-  Check,
-  Circle,
-  RefreshCw,
-  Folder,
-  Moon,
-  Target,
-  Bookmark,
-  X,
-  ArrowRight,
-} from "lucide-react";
+import { Check, Circle, Folder, Moon, X } from "lucide-react";
 import type { Task } from "@/lib/types";
-import { completeLearn, markShipped } from "@/app/actions";
+import { completeTask } from "@/app/actions";
 import TaskDetailModal from "./TaskDetailModal";
 
-export default function TodayInteractive({
-  focusTask,
-  otherTasks,
-}: {
-  focusTask: Task | null;
-  otherTasks: Task[];
-}) {
+export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
   const [pending, startTransition] = useTransition();
-  const [moment, setMoment] = useState<Task | null>(null);
-  const [actionTitle, setActionTitle] = useState("");
-  const [doneId, setDoneId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ id: string; title: string } | null>(null);
+  const [completing, setCompleting] = useState<Task | null>(null);
+  const [brief, setBrief] = useState("");
 
-  function openMoment(task: Task) {
-    setActionTitle(`Apply what you learned: ${task.title}`);
-    setMoment(task);
+  function openComplete(task: Task) {
+    setBrief("");
+    setCompleting(task);
   }
 
-  function onComplete(task: Task) {
-    if (task.type === "build") {
-      startTransition(async () => {
-        await markShipped(task.id);
-      });
-    } else {
-      openMoment(task);
-    }
-  }
-
-  function resolveMoment(withAction: boolean) {
-    if (!moment) return;
-    const id = moment.id;
-    const title = withAction ? actionTitle : undefined;
+  function confirmComplete() {
+    if (!completing) return;
+    const id = completing.id;
+    const text = brief;
     startTransition(async () => {
-      await completeLearn(id, title);
-      setMoment(null);
+      const res = await completeTask(id, text);
+      if (res.ok) setCompleting(null);
     });
   }
 
-  function completeFocus() {
-    if (!focusTask) return;
-    if (focusTask.type === "build") {
-      const id = focusTask.id;
-      startTransition(async () => {
-        const res = await markShipped(id);
-        if (res.ok) setDoneId(id);
-      });
-    } else {
-      openMoment(focusTask);
-    }
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-card border border-hair bg-surface px-4 py-12 text-center">
+        <p className="text-[15px] font-medium text-ink">You&apos;re all clear</p>
+        <p className="mx-auto mt-1 max-w-xs text-[13px] text-ink-2">
+          Nothing on your plate right now. Add a resource or pull something from the library.
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1.15fr_1fr]">
-      {/* Focus card */}
-      {focusTask && (
-        <section className="rounded-card border border-accent-tint bg-accent-tint/40 p-4">
-          <p className="mb-1.5 text-[11px] text-ink-3">Your one thing today</p>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-chip bg-accent-tint px-2 py-0.5 text-[11px] text-accent-ink">
-              {focusTask.type === "build" ? "Build · ship it" : "Learn · your focus"}
-            </span>
-            {focusTask.deadline && (
-              <span className="rounded-chip bg-warm-tint px-2 py-0.5 text-[11px] text-warm-ink">
-                due {focusTask.deadline}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setDetail({ id: focusTask.id, title: focusTask.title })}
-            className="text-left text-[17px] font-medium text-ink transition-colors duration-quick hover:text-accent-ink"
-          >
-            {focusTask.title}
-          </button>
-          {focusTask.note && (
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{focusTask.note}</p>
-          )}
-
-          {doneId === focusTask.id ? (
-            <div className="mt-3.5 flex items-center gap-2 rounded-control bg-ship-tint px-3 py-2">
-              <Check className="h-4 w-4 text-ship-ink" />
-              <span className="text-[13px] text-ship-ink">
-                That&apos;s real progress.
-              </span>
-            </div>
-          ) : (
-            <div className="mt-3.5 flex items-center gap-3">
-              <button
-                onClick={completeFocus}
-                disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-60"
-              >
-                <Target className="h-3.5 w-3.5" />{" "}
-                {focusTask.type === "build" ? "Mark shipped" : "Mark done"}
-              </button>
-              {focusTask.effortMin && (
-                <span className="text-[12px] text-ink-3">≈ {focusTask.effortMin} min</span>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Queue */}
-      <div>
-        <p className="mb-2 text-[11px] text-ink-3">Also on your plate</p>
-        <div className="overflow-hidden rounded-card border border-hair bg-surface">
-          {otherTasks.map((t) => (
-            <Row
-              key={t.id}
-              task={t}
-              pending={pending}
-              onComplete={() => onComplete(t)}
-              onOpen={() => setDetail({ id: t.id, title: t.title })}
-            />
-          ))}
-        </div>
+    <div>
+      <p className="mb-2 text-[11px] text-ink-3">Your tasks · soonest deadline first</p>
+      <div className="overflow-hidden rounded-card border border-hair bg-surface">
+        {tasks.map((t) => (
+          <Row
+            key={t.id}
+            task={t}
+            pending={pending}
+            onComplete={() => openComplete(t)}
+            onOpen={() => setDetail({ id: t.id, title: t.title })}
+          />
+        ))}
       </div>
 
       {detail && (
@@ -143,20 +61,25 @@ export default function TodayInteractive({
         />
       )}
 
-      {/* Turn-into-action moment */}
-      {moment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
-          <div className="w-full max-w-md rounded-hero border border-hair bg-canvas p-5">
+      {completing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"
+          onClick={() => !pending && setCompleting(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-hero border border-hair bg-canvas p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-3 flex items-start gap-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-ship-tint">
                 <Check className="h-4 w-4 text-ship-ink" />
               </span>
               <div className="flex-1">
-                <p className="text-[15px] font-medium text-ink">Nice, that&apos;s done</p>
-                <p className="text-[12px] text-ink-3">{moment.title}</p>
+                <p className="text-[15px] font-medium text-ink">Mark done</p>
+                <p className="text-[12px] text-ink-3">{completing.title}</p>
               </div>
               <button
-                onClick={() => setMoment(null)}
+                onClick={() => setCompleting(null)}
                 aria-label="Close"
                 className="text-ink-3 hover:text-ink"
               >
@@ -164,36 +87,34 @@ export default function TodayInteractive({
               </button>
             </div>
 
-            <p className="text-[16px] font-medium text-ink">So what will you do with it?</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
-              Watching it is fuel. Doing something real with it is the distance — the only thing
-              that moves your launch readiness.
+            <label className="block text-[12px] font-medium text-ink">
+              What did you get done?
+            </label>
+            <textarea
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="e.g. Sent 10 cold emails and logged the replies."
+              className="mt-1.5 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+            />
+            <p className="mt-1 text-[11px] text-ink-3">
+              Optional — a quick line helps the team see what actually moved.
             </p>
 
-            <label className="mt-4 block text-[11px] text-ink-3">The action</label>
-            <input
-              value={actionTitle}
-              onChange={(e) => setActionTitle(e.target.value)}
-              className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-            />
-
-            <div className="mt-4 flex flex-col gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <button
-                onClick={() => resolveMoment(true)}
-                disabled={pending || !actionTitle.trim()}
-                className="flex items-center gap-2 rounded-control bg-accent px-4 py-2.5 text-left text-[14px] font-medium text-white transition-transform duration-quick active:scale-[0.99] disabled:opacity-60"
+                onClick={() => setCompleting(null)}
+                className="rounded-control border border-hair px-4 py-2 text-[13px] text-ink-2 hover:bg-surface-soft"
               >
-                <Target className="h-4 w-4" />
-                <span className="flex-1">Turn it into an action</span>
-                <ArrowRight className="h-4 w-4" />
+                Cancel
               </button>
               <button
-                onClick={() => resolveMoment(false)}
+                onClick={confirmComplete}
                 disabled={pending}
-                className="flex items-center gap-2 rounded-control border border-hair bg-surface px-4 py-2.5 text-left text-[14px] text-ink-2 transition-colors duration-quick hover:bg-surface-soft disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-60"
               >
-                <Bookmark className="h-4 w-4" />
-                <span className="flex-1">Just knowledge for now</span>
+                <Check className="h-3.5 w-3.5" /> Mark done
               </button>
             </div>
           </div>
@@ -214,30 +135,38 @@ function Row({
   onComplete: () => void;
   onOpen: () => void;
 }) {
-  const canComplete = !task.isFolder && task.state !== "parked";
-
-  const leading = task.isFolder ? (
-    <Folder className="h-4 w-4 text-accent-ink" />
-  ) : task.state === "parked" ? (
-    <Moon className="h-4 w-4 text-ink-3" />
-  ) : task.overdue ? (
-    <RefreshCw className="h-4 w-4 text-warm-ink" />
-  ) : null;
+  const completable = !task.isFolder && task.state !== "parked";
 
   return (
-    <div className="flex items-center gap-3 border-b border-hair/60 px-3.5 py-2.5 last:border-b-0">
-      {canComplete ? (
+    <div className="flex items-center gap-3 border-b border-hair/60 px-3.5 py-3 last:border-b-0">
+      {completable ? (
         <button
           onClick={onComplete}
           disabled={pending}
-          aria-label="Mark complete"
+          aria-label="Mark done"
           className="shrink-0 text-ink-3 transition-colors duration-quick hover:text-ship-ink disabled:opacity-50"
         >
           <Circle className="h-[18px] w-[18px]" strokeWidth={1.5} />
         </button>
       ) : (
-        <span className="shrink-0">{leading}</span>
+        <span className="shrink-0">
+          {task.isFolder ? (
+            <Folder className="h-[18px] w-[18px] text-accent-ink" />
+          ) : (
+            <Moon className="h-[18px] w-[18px] text-ink-3" />
+          )}
+        </span>
       )}
+
+      <span
+        className={`shrink-0 rounded-chip px-2 py-0.5 text-[11px] ${
+          task.state === "parked"
+            ? "border border-hair bg-surface text-ink-2"
+            : "bg-accent-tint text-accent-ink"
+        }`}
+      >
+        {task.state === "parked" ? "Parked" : task.type === "build" ? "Build" : "Learn"}
+      </span>
 
       <button
         onClick={onOpen}
@@ -248,9 +177,7 @@ function Row({
         {task.title}
       </button>
 
-      {task.overdue && <span className="shrink-0 text-[11px] text-warm-ink">overdue</span>}
-
-      {task.isFolder && (
+      {task.isFolder ? (
         <span className="flex shrink-0 items-center gap-2">
           <span className="h-[5px] w-14 overflow-hidden rounded-full bg-surface-soft">
             <span
@@ -266,10 +193,18 @@ function Row({
             {task.childrenDone} / {task.childrenTotal}
           </span>
         </span>
-      )}
-
-      {task.state === "parked" && task.parkedReason && (
-        <span className="shrink-0 text-[11px] text-ink-3">parked · {task.parkedReason}</span>
+      ) : task.state === "parked" ? (
+        <span className="shrink-0 text-[11px] text-ink-3">
+          {task.parkedReason ? `parked · ${task.parkedReason}` : "parked"}
+        </span>
+      ) : task.overdue ? (
+        <span className="shrink-0 rounded-chip bg-warm-tint px-2 py-0.5 text-[11px] text-warm-ink">
+          overdue
+        </span>
+      ) : task.deadline ? (
+        <span className="shrink-0 text-[11px] text-ink-3">due {task.deadline}</span>
+      ) : (
+        <span className="shrink-0 text-[11px] text-ink-3">no deadline</span>
       )}
     </div>
   );

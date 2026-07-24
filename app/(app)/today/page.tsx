@@ -20,13 +20,14 @@ export default async function TodayPage() {
             Good evening, {data.founderName}
           </h1>
           <p className="mt-0.5 text-[12px] text-ink-3">
-            {today} · {data.otherTasks.length + (data.focusTask ? 1 : 0)} things for you
+            {today} · {data.tasks.length} {data.tasks.length === 1 ? "thing" : "things"} on
+            your plate
           </p>
         </div>
         <RatioChip learned={data.learned} applied={data.applied} />
       </div>
 
-      <TodayInteractive focusTask={data.focusTask} otherTasks={data.otherTasks} />
+      <TodayInteractive tasks={data.tasks} />
 
       <p className="mt-1 text-center text-[12px] italic text-ink-3">
         Learning is the fuel. Shipping is the distance.
