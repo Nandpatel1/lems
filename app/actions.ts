@@ -168,23 +168,28 @@ export async function assignResourceToMember(
 
 export interface TaskDetail {
   note: string | null;
+  state: string;
+  canComplete: boolean;
   comments: { id: string; author: string; body: string; createdAt: string }[];
 }
 
-/** Load a task's personal note and its comment thread. */
+/** Load a task's note, status, and comment thread. */
 export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   const db = supabaseAdmin();
-  if (!db) return { note: null, comments: [] };
+  if (!db) return { note: null, state: "todo", canComplete: false, comments: [] };
   const [{ data: task }, { data: comments }] = await Promise.all([
-    db.from("tasks").select("note").eq("id", taskId).single(),
+    db.from("tasks").select("note, state, is_folder").eq("id", taskId).single(),
     db
       .from("comments")
       .select("id, body, created_at, author:profiles(name)")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true }),
   ]);
+  const state = task?.state ?? "todo";
   return {
     note: task?.note ?? null,
+    state,
+    canComplete: state !== "complete" && !task?.is_folder,
     comments: (comments ?? []).map((c: any) => ({
       id: c.id,
       body: c.body,
@@ -192,6 +197,36 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
       author: c.author?.name ?? "Someone",
     })),
   };
+}
+
+export interface MemberTaskRow {
+  id: string;
+  title: string;
+  type: "learn" | "build";
+  state: string;
+  deadline: string | null;
+  note: string | null;
+  isFolder: boolean;
+}
+
+/** All of a teammate's tasks (active + completed), newest first — for team review. */
+export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]> {
+  const db = supabaseAdmin();
+  if (!db) return [];
+  const { data } = await db
+    .from("tasks")
+    .select("id, title, type, state, deadline, note, is_folder")
+    .eq("owner_id", memberId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((t: any) => ({
+    id: t.id,
+    title: t.title,
+    type: t.type,
+    state: t.state,
+    deadline: t.deadline ?? null,
+    note: t.note ?? null,
+    isFolder: t.is_folder ?? false,
+  }));
 }
 
 /** Save the personal note on a task. */

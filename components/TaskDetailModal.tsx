@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, Send } from "lucide-react";
-import { getTaskDetail, saveNote, addComment, type TaskDetail } from "@/app/actions";
+import { X, Send, Check } from "lucide-react";
+import {
+  getTaskDetail,
+  saveNote,
+  addComment,
+  completeTask,
+  type TaskDetail,
+} from "@/app/actions";
 
 export default function TaskDetailModal({
   taskId,
@@ -50,30 +56,63 @@ export default function TaskDetailModal({
     });
   }
 
+  function markDone() {
+    startTransition(async () => {
+      await saveNote(taskId, note);
+      await completeTask(taskId);
+      onClose();
+    });
+  }
+
+  const done = detail?.state === "complete";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-hero border border-hair bg-canvas p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"
+      onClick={() => !pending && onClose()}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-hero border border-hair bg-canvas p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 className="text-[16px] font-medium text-ink">{title}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[16px] font-medium text-ink">{title}</h2>
+            {done && (
+              <span className="rounded-chip bg-ship-tint px-2 py-0.5 text-[11px] text-ship-ink">
+                Done
+              </span>
+            )}
+          </div>
           <button onClick={onClose} aria-label="Close" className="text-ink-3 hover:text-ink">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <label className="text-[11px] text-ink-3">Your notes &amp; learnings</label>
+        <label className="text-[11px] text-ink-3">
+          {done ? "Notes — what got done" : "Your notes & learnings"}
+        </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           onBlur={persistNote}
           rows={4}
-          placeholder="What did you learn? What will you do with it?"
+          placeholder="What did you learn or get done? A quick line helps the team review it."
           className="mt-1 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
         />
-        <div className="mt-1 h-4 text-[11px] text-ship-ink">
-          {noteSaved ? "Saved" : ""}
-        </div>
+        <div className="mt-1 h-4 text-[11px] text-ship-ink">{noteSaved ? "Saved" : ""}</div>
 
-        <div className="mt-2 flex min-h-0 flex-1 flex-col border-t border-hair pt-3">
+        {detail?.canComplete && (
+          <button
+            onClick={markDone}
+            disabled={pending}
+            className="mt-1 inline-flex items-center gap-1.5 self-start rounded-control bg-accent px-4 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-60"
+          >
+            <Check className="h-3.5 w-3.5" /> Mark done
+          </button>
+        )}
+
+        <div className="mt-3 flex min-h-0 flex-1 flex-col border-t border-hair pt-3">
           <p className="mb-2 text-[11px] text-ink-3">Comments</p>
           <div className="flex-1 space-y-2 overflow-y-auto">
             {detail === null ? (
