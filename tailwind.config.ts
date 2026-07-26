@@ -26,6 +26,9 @@ const config: Config = {
         ship: "var(--ship)",
         "ship-tint": "var(--ship-tint)",
         "ship-ink": "var(--ship-ink)",
+        danger: "var(--danger)",
+        "danger-tint": "var(--danger-tint)",
+        "danger-ink": "var(--danger-ink)",
       },
       borderRadius: {
         chip: "6px",

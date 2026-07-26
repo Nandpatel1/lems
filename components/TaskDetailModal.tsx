@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Send, Check } from "lucide-react";
+import { Send, Check, Trash2 } from "lucide-react";
 import {
   getTaskDetail,
   saveNote,
   addComment,
   completeTask,
+  deleteTask,
   type TaskDetail,
 } from "@/app/actions";
 import Modal from "./Modal";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function TaskDetailModal({
   taskId,
@@ -24,6 +26,7 @@ export default function TaskDetailModal({
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
   const [comment, setComment] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -68,7 +71,8 @@ export default function TaskDetailModal({
   const done = detail?.state === "complete";
 
   return (
-    <Modal
+    <>
+      <Modal
       maxWidth="max-w-lg"
       onClose={onClose}
       title={
@@ -148,6 +152,30 @@ export default function TaskDetailModal({
           </button>
         </div>
       </div>
-    </Modal>
+
+      <div className="mt-3 border-t border-hair pt-3">
+        <button
+          onClick={() => setConfirmingDelete(true)}
+          className="inline-flex items-center gap-1.5 text-[12px] text-danger-ink transition-colors duration-quick hover:underline"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Delete task
+        </button>
+      </div>
+      </Modal>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete task"
+          message="This permanently removes the task and its comments. This can't be undone."
+          confirmLabel="Delete task"
+          onConfirm={async () => {
+            const res = await deleteTask(taskId);
+            if (res.ok) onClose();
+            return res;
+          }}
+          onClose={() => setConfirmingDelete(false)}
+        />
+      )}
+    </>
   );
 }

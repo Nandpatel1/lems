@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText } from "lucide-react";
+import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText, Trash2 } from "lucide-react";
 import type { LibraryFolder, Resource } from "@/lib/types";
 import AssignControl from "./AssignControl";
 import ResourceDetailModal from "./ResourceDetailModal";
-import { assignResourceToMember, assignFolderToMember } from "@/app/actions";
+import ConfirmDialog from "./ConfirmDialog";
+import { assignResourceToMember, assignFolderToMember, deleteFolder } from "@/app/actions";
 
 type Member = { id: string; name: string };
 
@@ -18,6 +19,7 @@ export default function FolderGroup({
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Resource | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <section className="overflow-hidden rounded-card border border-hair bg-surface">
@@ -49,13 +51,20 @@ export default function FolderGroup({
         <span className="ml-auto flex items-center gap-3">
           <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
           {folder.id !== "__unfiled__" && (
-            <span onClick={(e) => e.stopPropagation()}>
+            <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
               <AssignControl
                 members={members}
                 heading={`Assign all of "${folder.name}"`}
                 triggerLabel="Assign folder"
                 onAssign={(o, d) => assignFolderToMember(folder.id, o, d)}
               />
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                aria-label="Delete folder"
+                className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </span>
           )}
         </span>
@@ -108,6 +117,23 @@ export default function FolderGroup({
 
       {detail && (
         <ResourceDetailModal resource={detail} onClose={() => setDetail(null)} />
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete folder"
+          message={
+            <>
+              Delete <span className="font-medium text-ink">&quot;{folder.name}&quot;</span> and
+              its {folder.resources.length} resource
+              {folder.resources.length === 1 ? "" : "s"}? Any tasks created from this folder are
+              removed too. This can&apos;t be undone.
+            </>
+          }
+          confirmLabel="Delete folder"
+          onConfirm={() => deleteFolder(folder.id)}
+          onClose={() => setConfirmingDelete(false)}
+        />
       )}
     </section>
   );

@@ -20,6 +20,9 @@
   --ship: #2e7d46;
   --ship-tint: #e4f0e5;
   --ship-ink: #245e36;
+  --danger: #c0392b;
+  --danger-tint: #f8e7e4;
+  --danger-ink: #8e2a1f;
 }
 
 [data-theme="dark"] {
@@ -40,6 +43,9 @@
   --ship: #6fbf8a;
   --ship-tint: #1e3326;
   --ship-ink: #9bd7af;
+  --danger: #e07a6b;
+  --danger-tint: #3a211c;
+  --danger-ink: #f0b5ac;
 }
 
 html,

@@ -21,6 +21,29 @@ function revalidateAll() {
   revalidatePath("/library");
 }
 
+/** Permanently delete a single task (its comments cascade away with it). */
+export async function deleteTask(taskId: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db.from("tasks").delete().eq("id", taskId);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Permanently delete a folder along with its resources and any tasks from it. */
+export async function deleteFolder(folderId: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  // Tasks created from this folder (comments cascade), then its resources, then the folder.
+  await db.from("tasks").delete().eq("folder_id", folderId);
+  await db.from("resources").delete().eq("folder_id", folderId);
+  const { error } = await db.from("folders").delete().eq("id", folderId);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
 /** Mark a task done, with an optional brief of what got done (saved to its notes).
  *  Build tasks also count as "applied" (shipped real work). */
 export async function completeTask(
