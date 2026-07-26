@@ -1,14 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Folder,
-  FolderOpen,
-  ChevronRight,
-  ListOrdered,
-  ExternalLink,
-  FileText,
-} from "lucide-react";
+import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText } from "lucide-react";
 import type { LibraryFolder, Resource } from "@/lib/types";
 import AssignControl from "./AssignControl";
 import ResourceDetailModal from "./ResourceDetailModal";
@@ -53,11 +46,6 @@ export default function FolderGroup({
           <Folder className="h-[18px] w-[18px] shrink-0 text-accent-ink" />
         )}
         <span className="text-[14px] font-medium text-ink">{folder.name}</span>
-        {folder.ordered && (
-          <span className="inline-flex items-center gap-1 rounded-chip bg-surface-soft px-2 py-0.5 text-[11px] text-ink-2">
-            <ListOrdered className="h-3 w-3" /> ordered
-          </span>
-        )}
         <span className="ml-auto flex items-center gap-3">
           <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
           <span onClick={(e) => e.stopPropagation()}>
@@ -103,11 +91,6 @@ export default function FolderGroup({
                     )}
                   </div>
                 </div>
-                {r.effortMin && (
-                  <span className="hidden shrink-0 text-[11px] text-ink-3 sm:inline">
-                    ≈ {r.effortMin}m
-                  </span>
-                )}
                 <span onClick={(e) => e.stopPropagation()}>
                   <AssignControl
                     members={members}
