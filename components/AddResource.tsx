@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { addResource } from "@/app/actions";
 import Select from "./Select";
+import Modal from "./Modal";
 
 type FolderOpt = { id: string; name: string };
 type MemberOpt = { id: string; name: string };
@@ -66,29 +67,12 @@ export default function AddResource({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"
-          onClick={() => !pending && setOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-hero border border-hair bg-canvas p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[16px] font-medium text-ink">Add a resource</h2>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="text-ink-3 hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
+        <Modal title="Add a resource" onClose={() => setOpen(false)} onEnter={submit}>
             <label className="block text-[11px] text-ink-3">Title</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              autoFocus
               placeholder="e.g. Advanced cold email tactics"
               className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
             />
@@ -172,8 +156,7 @@ export default function AddResource({
                 {pending ? "Saving…" : "Add resource"}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

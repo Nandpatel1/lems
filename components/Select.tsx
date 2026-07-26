@@ -57,7 +57,7 @@ export default function Select({
   }, [open, active, options, onChange]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative" data-select-open={open ? "true" : undefined}>
       <button
         type="button"
         aria-label={ariaLabel}
