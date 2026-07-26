@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { addResource } from "@/app/actions";
+import Select from "./Select";
 
 type FolderOpt = { id: string; name: string };
 type MemberOpt = { id: string; name: string };
@@ -95,18 +96,17 @@ export default function AddResource({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] text-ink-3">Folder</label>
-                <select
-                  value={folderId}
-                  onChange={(e) => setFolderId(e.target.value)}
-                  className="mt-1 w-full rounded-control border border-hair bg-surface px-2 py-2 text-[13px] text-ink outline-none focus:border-accent"
-                >
-                  <option value="">No folder</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <Select
+                    ariaLabel="Folder"
+                    value={folderId}
+                    onChange={setFolderId}
+                    options={[
+                      { value: "", label: "No folder" },
+                      ...folders.map((f) => ({ value: f.id, label: f.name })),
+                    ]}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] text-ink-3">Source</label>
@@ -131,18 +131,17 @@ export default function AddResource({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] text-ink-3">Assign to</label>
-                <select
-                  value={assignTo}
-                  onChange={(e) => setAssignTo(e.target.value)}
-                  className="mt-1 w-full rounded-control border border-hair bg-surface px-2 py-2 text-[13px] text-ink outline-none focus:border-accent"
-                >
-                  <option value="">No one (library only)</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <Select
+                    ariaLabel="Assign to"
+                    value={assignTo}
+                    onChange={setAssignTo}
+                    options={[
+                      { value: "", label: "No one (library only)" },
+                      ...members.map((m) => ({ value: m.id, label: m.name })),
+                    ]}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] text-ink-3">Deadline</label>

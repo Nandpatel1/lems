@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { UserPlus, X, Check } from "lucide-react";
+import Select from "./Select";
 
 type Member = { id: string; name: string };
 type Result = { ok: boolean; error?: string };
@@ -83,17 +84,14 @@ export default function AssignControl({
             </div>
 
             <label className="block text-[11px] text-ink-3">To</label>
-            <select
-              value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
-              className="mt-1 w-full rounded-control border border-hair bg-surface px-2 py-2 text-[13px] text-ink outline-none focus:border-accent"
-            >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <Select
+                ariaLabel="Assign to"
+                value={ownerId}
+                onChange={setOwnerId}
+                options={members.map((m) => ({ value: m.id, label: m.name }))}
+              />
+            </div>
 
             <label className="mt-3 block text-[11px] text-ink-3">Deadline (optional)</label>
             <input
