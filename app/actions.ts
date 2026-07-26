@@ -80,11 +80,30 @@ async function notifyAssignment(
   });
 }
 
+/** Create a new library folder. Returns its id so the caller can select it. */
+export async function createFolder(
+  name: string
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Folder name is required" };
+  const { data, error } = await db
+    .from("folders")
+    .insert({ name: trimmed })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/library");
+  return { ok: true, id: data?.id };
+}
+
 /** Capture a new resource into the shared library; optionally assign it to someone. */
 export async function addResource(input: NewResource): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
   if (!input.title.trim()) return { ok: false, error: "Title is required" };
+  if (!input.folderId) return { ok: false, error: "Please choose a folder" };
 
   const { data, error } = await db
     .from("resources")

@@ -190,22 +190,34 @@ export async function getLibrary(): Promise<LibraryFolder[]> {
       db.from("resources").select("*"),
     ]);
     if (!folders || !resources) throw new Error("empty");
-    return folders.map((f: any) => ({
+    const mapRes = (r: any) => ({
+      id: r.id,
+      title: r.title,
+      type: r.type,
+      source: r.source ?? undefined,
+      tags: r.tags ?? [],
+      effortMin: r.est_effort_min ?? undefined,
+      description: r.description ?? undefined,
+    });
+
+    const groups: LibraryFolder[] = folders.map((f: any) => ({
       id: f.id,
       name: f.name,
       ordered: f.ordered,
-      resources: resources
-        .filter((r: any) => r.folder_id === f.id)
-        .map((r: any) => ({
-          id: r.id,
-          title: r.title,
-          type: r.type,
-          source: r.source ?? undefined,
-          tags: r.tags ?? [],
-          effortMin: r.est_effort_min ?? undefined,
-          description: r.description ?? undefined,
-        })),
+      resources: resources.filter((r: any) => r.folder_id === f.id).map(mapRes),
     }));
+
+    const orphans = resources.filter((r: any) => !r.folder_id);
+    if (orphans.length > 0) {
+      groups.push({
+        id: "__unfiled__",
+        name: "Unfiled",
+        ordered: false,
+        resources: orphans.map(mapRes),
+      });
+    }
+
+    return groups;
   } catch {
     return seed.libraryFolders;
   }

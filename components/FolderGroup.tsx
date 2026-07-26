@@ -48,14 +48,16 @@ export default function FolderGroup({
         <span className="text-[14px] font-medium text-ink">{folder.name}</span>
         <span className="ml-auto flex items-center gap-3">
           <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
-          <span onClick={(e) => e.stopPropagation()}>
-            <AssignControl
-              members={members}
-              heading={`Assign all of "${folder.name}"`}
-              triggerLabel="Assign folder"
-              onAssign={(o, d) => assignFolderToMember(folder.id, o, d)}
-            />
-          </span>
+          {folder.id !== "__unfiled__" && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <AssignControl
+                members={members}
+                heading={`Assign all of "${folder.name}"`}
+                triggerLabel="Assign folder"
+                onAssign={(o, d) => assignFolderToMember(folder.id, o, d)}
+              />
+            </span>
+          )}
         </span>
       </div>
 

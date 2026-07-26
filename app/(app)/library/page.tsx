@@ -1,4 +1,5 @@
 import AddResource from "@/components/AddResource";
+import NewFolderButton from "@/components/NewFolderButton";
 import FolderGroup from "@/components/FolderGroup";
 import { getLibrary, getProfiles } from "@/lib/data";
 
@@ -6,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
   const [libraryFolders, profiles] = await Promise.all([getLibrary(), getProfiles()]);
-  const folderOpts = libraryFolders.map((f) => ({ id: f.id, name: f.name }));
+  const folderOpts = libraryFolders
+    .filter((f) => f.id !== "__unfiled__")
+    .map((f) => ({ id: f.id, name: f.name }));
   const members = profiles.map((p) => ({ id: p.id, name: p.name }));
 
   return (
@@ -18,7 +21,10 @@ export default async function LibraryPage() {
             Your shared knowledge base — organize it however works, reshape it anytime.
           </p>
         </div>
-        <AddResource folders={folderOpts} members={members} />
+        <div className="flex items-center gap-2">
+          <NewFolderButton />
+          <AddResource folders={folderOpts} members={members} />
+        </div>
       </div>
 
       {libraryFolders.length === 0 ? (
