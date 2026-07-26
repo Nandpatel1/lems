@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { Circle, Folder, Moon } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Circle, Folder, Moon, List } from "lucide-react";
 import type { Task } from "@/lib/types";
 import TaskDetailModal from "./TaskDetailModal";
 
+type View = "list" | "folders";
+
 export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
   const [detail, setDetail] = useState<{ id: string; title: string } | null>(null);
+  const [view, setView] = useState<View>("list");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("today_view");
+    if (saved === "folders" || saved === "list") setView(saved);
+  }, []);
+
+  function changeView(v: View) {
+    setView(v);
+    localStorage.setItem("today_view", v);
+  }
 
   if (tasks.length === 0) {
     return (
@@ -19,14 +32,44 @@ export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
     );
   }
 
+  const groups = groupByFolder(tasks);
+
   return (
     <div>
-      <p className="mb-2 text-[11px] text-ink-3">Your tasks · soonest deadline first</p>
-      <div className="overflow-hidden rounded-card border border-hair bg-surface">
-        {tasks.map((t) => (
-          <Row key={t.id} task={t} onOpen={() => setDetail({ id: t.id, title: t.title })} />
-        ))}
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-[11px] text-ink-3">
+          {view === "list" ? "Your tasks · soonest deadline first" : "Your tasks · grouped by folder"}
+        </p>
+        <div className="inline-flex items-center gap-0.5 rounded-control border border-hair bg-surface p-0.5">
+          <ViewButton active={view === "list"} onClick={() => changeView("list")} icon={<List className="h-3.5 w-3.5" />} label="List" />
+          <ViewButton active={view === "folders"} onClick={() => changeView("folders")} icon={<Folder className="h-3.5 w-3.5" />} label="By folder" />
+        </div>
       </div>
+
+      {view === "list" ? (
+        <div className="overflow-hidden rounded-card border border-hair bg-surface">
+          {tasks.map((t) => (
+            <Row key={t.id} task={t} onOpen={() => setDetail({ id: t.id, title: t.title })} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {groups.map(([name, groupTasks]) => (
+            <section key={name}>
+              <div className="mb-1.5 flex items-center gap-2 px-1">
+                <Folder className="h-[15px] w-[15px] text-accent-ink" />
+                <span className="text-[12px] font-medium text-ink">{name}</span>
+                <span className="text-[11px] text-ink-3">{groupTasks.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-card border border-hair bg-surface">
+                {groupTasks.map((t) => (
+                  <Row key={t.id} task={t} onOpen={() => setDetail({ id: t.id, title: t.title })} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
       {detail && (
         <TaskDetailModal
@@ -39,9 +82,46 @@ export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
-  const completable = !task.isFolder && task.state !== "parked";
+function groupByFolder(tasks: Task[]): [string, Task[]][] {
+  const map = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const key = t.folderName ?? "No folder";
+    const arr = map.get(key);
+    if (arr) arr.push(t);
+    else map.set(key, [t]);
+  }
+  return Array.from(map.entries()).sort((a, b) => {
+    if (a[0] === "No folder") return 1;
+    if (b[0] === "No folder") return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
 
+function ViewButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-[12px] transition-colors duration-quick ${
+        active ? "bg-accent-tint font-medium text-accent-ink" : "text-ink-3 hover:text-ink"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
   return (
     <div
       role="button"
@@ -61,10 +141,7 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
         ) : task.state === "parked" ? (
           <Moon className="h-[18px] w-[18px] text-ink-3" />
         ) : (
-          <Circle
-            className={`h-[18px] w-[18px] ${completable ? "text-ink-3" : "text-ink-3"}`}
-            strokeWidth={1.5}
-          />
+          <Circle className="h-[18px] w-[18px] text-ink-3" strokeWidth={1.5} />
         )}
       </span>
 

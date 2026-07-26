@@ -145,12 +145,16 @@ export async function getToday(): Promise<TodayData> {
   try {
     if (!db) throw new Error("no-db");
     const uid = await currentUid();
-    const [{ data: profile }, { data: tasks }] = await Promise.all([
+    const [{ data: profile }, { data: tasks }, { data: folders }] = await Promise.all([
       db.from("profiles").select("name").eq("id", uid).single(),
       db.from("tasks").select("*").eq("owner_id", uid),
+      db.from("folders").select("id, name"),
     ]);
     if (!tasks) throw new Error("empty");
 
+    const folderMap = new Map<string, string>(
+      (folders ?? []).map((f: any) => [f.id, f.name])
+    );
     const active = tasks.filter((t: any) => t.state !== "complete");
     active.sort(byDeadline);
     const learned = tasks.filter(
@@ -162,7 +166,10 @@ export async function getToday(): Promise<TodayData> {
       founderName: profile?.name ?? seed.founder.name,
       learned,
       applied,
-      tasks: active.map(mapTask),
+      tasks: active.map((t: any) => ({
+        ...mapTask(t),
+        folderName: t.folder_id ? folderMap.get(t.folder_id) : undefined,
+      })),
     };
   } catch {
     return {

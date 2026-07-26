@@ -16,6 +16,7 @@ export interface Task {
   childrenDone?: number;
   childrenTotal?: number;
   note?: string;
+  folderName?: string;
 }
 
 export interface Milestone {

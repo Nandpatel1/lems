@@ -108,6 +108,7 @@ export async function addResource(input: NewResource): Promise<ActionResult> {
         type: data.type,
         state: "todo",
         deadline: input.deadline || null,
+        folder_id: input.folderId || null,
       })
       .select("id")
       .single();
@@ -130,7 +131,7 @@ export async function assignResourceToMember(
 
   const { data: r, error } = await db
     .from("resources")
-    .select("title, type")
+    .select("title, type, folder_id")
     .eq("id", resourceId)
     .single();
   if (error || !r) return { ok: false, error: error?.message ?? "Resource not found" };
@@ -155,6 +156,7 @@ export async function assignResourceToMember(
       type: r.type,
       state: "todo",
       deadline: deadline || null,
+      folder_id: r.folder_id ?? null,
     })
     .select("id")
     .single();
@@ -196,6 +198,7 @@ export async function assignFolderToMember(
       type: r.type,
       state: "todo",
       deadline: deadline || null,
+      folder_id: folderId,
     }));
 
   if (toInsert.length > 0) {
