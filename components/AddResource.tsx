@@ -19,19 +19,17 @@ export default function AddResource({
   const [error, setError] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<"learn" | "build">("learn");
   const [folderId, setFolderId] = useState<string>(folders[0]?.id ?? "");
   const [source, setSource] = useState("");
-  const [tags, setTags] = useState("");
+  const [description, setDescription] = useState("");
   const [assignTo, setAssignTo] = useState<string>("");
   const [deadline, setDeadline] = useState("");
 
   function reset() {
     setTitle("");
-    setType("learn");
     setFolderId(folders[0]?.id ?? "");
     setSource("");
-    setTags("");
+    setDescription("");
     setAssignTo("");
     setDeadline("");
     setError(null);
@@ -42,13 +40,9 @@ export default function AddResource({
     startTransition(async () => {
       const res = await addResource({
         title,
-        type,
         folderId: folderId || null,
         source,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        description,
         assignTo: assignTo || null,
         deadline: deadline || null,
       });
@@ -71,8 +65,14 @@ export default function AddResource({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
-          <div className="w-full max-w-md rounded-hero border border-hair bg-canvas p-5">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"
+          onClick={() => !pending && setOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-hero border border-hair bg-canvas p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[16px] font-medium text-ink">Add a resource</h2>
               <button
@@ -91,22 +91,6 @@ export default function AddResource({
               placeholder="e.g. Advanced cold email tactics"
               className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
             />
-
-            <div className="mt-3 flex gap-2">
-              {(["learn", "build"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setType(t)}
-                  className={`flex-1 rounded-control border px-3 py-2 text-[13px] capitalize transition-colors duration-quick ${
-                    type === t
-                      ? "border-accent bg-accent-tint text-accent-ink"
-                      : "border-hair bg-surface text-ink-2 hover:bg-surface-soft"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
@@ -135,12 +119,13 @@ export default function AddResource({
               </div>
             </div>
 
-            <label className="mt-3 block text-[11px] text-ink-3">Tags (comma-separated)</label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="email, outreach"
-              className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+            <label className="mt-3 block text-[11px] text-ink-3">Details (optional)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="Context, links, what to focus on…"
+              className="mt-1 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
             />
 
             <div className="mt-3 grid grid-cols-2 gap-2">

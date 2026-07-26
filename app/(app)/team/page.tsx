@@ -42,7 +42,7 @@ export default async function TeamPage() {
           <Link
             key={m.id}
             href={`/team/${m.id}`}
-            className="group rounded-card border border-hair bg-surface p-4 transition-colors duration-quick hover:border-hair-strong hover:bg-surface-soft/40"
+            className="group rounded-card border border-hair bg-surface p-4 transition-colors duration-quick hover:border-hair-strong hover:bg-surface-soft"
           >
             <div className="mb-3 flex items-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-accent-tint text-[13px] font-medium text-accent-ink">

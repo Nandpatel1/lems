@@ -24,7 +24,7 @@ export default async function LoginPage() {
               <input type="hidden" name="id" value={p.id} />
               <button
                 type="submit"
-                className="group flex w-full items-center gap-3 rounded-card border border-hair bg-surface px-4 py-3 text-left transition-colors duration-quick hover:border-accent hover:bg-accent-tint/30"
+                className="group flex w-full items-center gap-3 rounded-card border border-hair bg-surface px-4 py-3 text-left transition-colors duration-quick hover:border-accent hover:bg-accent-tint"
               >
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-accent-tint text-[13px] font-medium text-accent-ink">
                   {p.initial}

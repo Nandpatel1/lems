@@ -8,7 +8,7 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-10 flex border-t border-hair bg-surface-soft/95 backdrop-blur">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-10 flex border-t border-hair bg-surface-soft backdrop-blur">
       {navItems.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + "/");
         return (

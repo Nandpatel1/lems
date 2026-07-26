@@ -56,10 +56,9 @@ export async function completeTask(
 
 export interface NewResource {
   title: string;
-  type: "learn" | "build";
   folderId?: string | null;
   source?: string;
-  tags?: string[];
+  description?: string;
   assignTo?: string | null;
   deadline?: string | null;
 }
@@ -91,10 +90,10 @@ export async function addResource(input: NewResource): Promise<ActionResult> {
     .from("resources")
     .insert({
       title: input.title.trim(),
-      type: input.type,
+      type: "learn",
       folder_id: input.folderId || null,
       source: input.source?.trim() || null,
-      tags: input.tags ?? [],
+      description: input.description?.trim() || null,
     })
     .select("title, type")
     .single();
@@ -163,6 +162,77 @@ export async function assignResourceToMember(
 
   await notifyAssignment(db, ownerId, r.title, task?.id ?? null);
   revalidateAll();
+  return { ok: true };
+}
+
+/** Assign every resource in a folder to a teammate (deduped), with one notification. */
+export async function assignFolderToMember(
+  folderId: string,
+  ownerId: string,
+  deadline?: string | null
+): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+
+  const [{ data: folder }, { data: resources, error }] = await Promise.all([
+    db.from("folders").select("name").eq("id", folderId).single(),
+    db.from("resources").select("title, type").eq("folder_id", folderId),
+  ]);
+  if (error) return { ok: false, error: error.message };
+  if (!resources || resources.length === 0) return { ok: false, error: "Folder is empty" };
+
+  const { data: existing } = await db
+    .from("tasks")
+    .select("title")
+    .eq("owner_id", ownerId)
+    .neq("state", "complete");
+  const have = new Set((existing ?? []).map((t: any) => t.title));
+
+  const toInsert = resources
+    .filter((r: any) => !have.has(r.title))
+    .map((r: any) => ({
+      owner_id: ownerId,
+      title: r.title,
+      type: r.type,
+      state: "todo",
+      deadline: deadline || null,
+    }));
+
+  if (toInsert.length > 0) {
+    const { error: insErr } = await db.from("tasks").insert(toInsert);
+    if (insErr) return { ok: false, error: insErr.message };
+  }
+
+  const me = await currentUid();
+  if (ownerId !== me) {
+    await db.from("notifications").insert({
+      recipient_id: ownerId,
+      actor_id: me,
+      type: "assigned",
+      task_id: null,
+      body: `New assignment: the "${folder?.name ?? "folder"}" folder (${
+        toInsert.length
+      } item${toInsert.length === 1 ? "" : "s"}).`,
+    });
+  }
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Save the free-form details on a library resource. */
+export async function saveResourceDescription(
+  resourceId: string,
+  description: string
+): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db
+    .from("resources")
+    .update({ description: description.trim() || null })
+    .eq("id", resourceId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/library");
   return { ok: true };
 }
 

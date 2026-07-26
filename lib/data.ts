@@ -196,6 +196,7 @@ export async function getLibrary(): Promise<LibraryFolder[]> {
           source: r.source ?? undefined,
           tags: r.tags ?? [],
           effortMin: r.est_effort_min ?? undefined,
+          description: r.description ?? undefined,
         })),
     }));
   } catch {

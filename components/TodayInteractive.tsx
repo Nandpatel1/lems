@@ -53,7 +53,7 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
           onOpen();
         }
       }}
-      className="flex cursor-pointer items-center gap-3 border-b border-hair/60 px-3.5 py-3 text-left transition-colors duration-quick last:border-b-0 hover:bg-surface-soft/60"
+      className="flex cursor-pointer items-center gap-3 border-b border-hair px-3.5 py-3 text-left transition-colors duration-quick last:border-b-0 hover:bg-surface-soft"
     >
       <span className="shrink-0">
         {task.isFolder ? (
@@ -68,15 +68,11 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
         )}
       </span>
 
-      <span
-        className={`shrink-0 rounded-chip px-2 py-0.5 text-[11px] ${
-          task.state === "parked"
-            ? "border border-hair bg-surface text-ink-2"
-            : "bg-accent-tint text-accent-ink"
-        }`}
-      >
-        {task.state === "parked" ? "Parked" : task.type === "build" ? "Build" : "Learn"}
-      </span>
+      {task.state === "parked" && (
+        <span className="shrink-0 rounded-chip border border-hair bg-surface px-2 py-0.5 text-[11px] text-ink-2">
+          Parked
+        </span>
+      )}
 
       <span
         className={`min-w-0 flex-1 truncate text-[13px] ${

@@ -156,9 +156,6 @@ export default function MemberWorkspace({
             <div className="flex flex-col gap-4">
               <div>
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-chip bg-accent-tint px-2 py-0.5 text-[11px] text-accent-ink">
-                    {selected.type === "build" ? "Build" : "Learn"}
-                  </span>
                   {selected.state === "complete" ? (
                     <span className="rounded-chip bg-ship-tint px-2 py-0.5 text-[11px] text-ship-ink">
                       Done
@@ -322,14 +319,25 @@ function Section({
               <button
                 key={t.id}
                 onClick={() => onSelect(t.id)}
-                className={`flex w-full items-center gap-2.5 border-b border-hair/60 px-3 py-2.5 text-left transition-colors duration-quick last:border-b-0 ${
-                  selected ? "bg-accent-tint/40" : "hover:bg-surface-soft/60"
+                aria-current={selected}
+                className={`flex w-full items-center gap-2 border-b border-hair py-2.5 pr-3 text-left transition-colors duration-quick last:border-b-0 ${
+                  selected ? "bg-accent-tint" : "hover:bg-surface-soft"
                 }`}
               >
+                <span
+                  aria-hidden="true"
+                  className={`h-9 w-[3px] shrink-0 rounded-r ${
+                    selected ? "bg-accent" : "bg-transparent"
+                  }`}
+                />
                 <TaskIcon t={t} selected={selected} />
                 <span
                   className={`min-w-0 flex-1 truncate text-[12px] ${
-                    t.state === "complete" ? "text-ink-2" : "text-ink"
+                    selected
+                      ? "font-medium text-accent-ink"
+                      : t.state === "complete"
+                      ? "text-ink-2"
+                      : "text-ink"
                   }`}
                 >
                   {t.title}

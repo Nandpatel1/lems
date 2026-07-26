@@ -38,6 +38,7 @@ export interface Resource {
   source?: string;
   tags: string[];
   effortMin?: number;
+  description?: string;
 }
 
 export interface LibraryFolder {
