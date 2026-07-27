@@ -31,6 +31,26 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/** Permanently delete a single library resource. */
+export async function deleteResource(resourceId: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db.from("resources").delete().eq("id", resourceId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/library");
+  return { ok: true };
+}
+
+/** Delete every resource that isn't in a folder (clears the "Unfiled" group). */
+export async function deleteUnfiledResources(): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db.from("resources").delete().is("folder_id", null);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/library");
+  return { ok: true };
+}
+
 /** Permanently delete a folder along with its resources and any tasks from it. */
 export async function deleteFolder(folderId: string): Promise<ActionResult> {
   const db = supabaseAdmin();

@@ -6,7 +6,13 @@ import type { LibraryFolder, Resource } from "@/lib/types";
 import AssignControl from "./AssignControl";
 import ResourceDetailModal from "./ResourceDetailModal";
 import ConfirmDialog from "./ConfirmDialog";
-import { assignResourceToMember, assignFolderToMember, deleteFolder } from "@/app/actions";
+import {
+  assignResourceToMember,
+  assignFolderToMember,
+  deleteFolder,
+  deleteResource,
+  deleteUnfiledResources,
+} from "@/app/actions";
 
 type Member = { id: string; name: string };
 
@@ -20,6 +26,9 @@ export default function FolderGroup({
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Resource | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmResource, setConfirmResource] = useState<Resource | null>(null);
+  const [confirmClearUnfiled, setConfirmClearUnfiled] = useState(false);
+  const isUnfiled = folder.id === "__unfiled__";
 
   return (
     <section className="overflow-hidden rounded-card border border-hair bg-surface">
@@ -50,7 +59,18 @@ export default function FolderGroup({
         <span className="text-[14px] font-medium text-ink">{folder.name}</span>
         <span className="ml-auto flex items-center gap-3">
           <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
-          {folder.id !== "__unfiled__" && (
+          {isUnfiled ? (
+            folder.resources.length > 0 && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setConfirmClearUnfiled(true)}
+                  className="inline-flex items-center gap-1 rounded-chip border border-hair-strong bg-surface px-2 py-1 text-[11px] text-danger-ink transition-colors duration-quick hover:border-danger hover:bg-danger-tint"
+                >
+                  <Trash2 className="h-3 w-3" /> Clear all
+                </button>
+              </span>
+            )
+          ) : (
             <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
               <AssignControl
                 members={members}
@@ -102,12 +122,19 @@ export default function FolderGroup({
                     )}
                   </div>
                 </div>
-                <span onClick={(e) => e.stopPropagation()}>
+                <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                   <AssignControl
                     members={members}
                     heading={`Assign "${r.title}"`}
                     onAssign={(o, d) => assignResourceToMember(r.id, o, d)}
                   />
+                  <button
+                    onClick={() => setConfirmResource(r)}
+                    aria-label="Delete resource"
+                    className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </span>
               </div>
             ))
@@ -133,6 +160,36 @@ export default function FolderGroup({
           confirmLabel="Delete folder"
           onConfirm={() => deleteFolder(folder.id)}
           onClose={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmResource && (
+        <ConfirmDialog
+          title="Delete resource"
+          message={
+            <>
+              Delete <span className="font-medium text-ink">&quot;{confirmResource.title}&quot;</span>{" "}
+              from the library? This can&apos;t be undone.
+            </>
+          }
+          confirmLabel="Delete resource"
+          onConfirm={() => deleteResource(confirmResource.id)}
+          onClose={() => setConfirmResource(null)}
+        />
+      )}
+
+      {confirmClearUnfiled && (
+        <ConfirmDialog
+          title="Clear unfiled resources"
+          message={
+            <>
+              Delete all {folder.resources.length} unfiled resource
+              {folder.resources.length === 1 ? "" : "s"}? This can&apos;t be undone.
+            </>
+          }
+          confirmLabel="Delete all"
+          onConfirm={() => deleteUnfiledResources()}
+          onClose={() => setConfirmClearUnfiled(false)}
         />
       )}
     </section>
