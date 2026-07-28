@@ -78,6 +78,31 @@ on **Opus**; execution-heavy roles run on **Sonnet**. Launch a stage with its sl
 
 Slash commands live in `.claude/commands/`. `/status` prints where we are.
 
+### Standing authorization to use these agents
+
+**Nand has explicitly and durably requested that you use these agents proactively.** Treat
+this section as him asking, every session — you do not need to ask permission first, and you
+should not do design or review work yourself that one of these specialists owns. Say which
+agent you're launching and why, then launch it.
+
+Use them when the work genuinely calls for it:
+
+- **Any UI/UX work** (new screen, new component, changing how something feels or looks) →
+  `interaction-designer` and/or `ux-architect` before building, `design-critic` after. This
+  is a hard rule: Stage 2 is the most important stage, and shipping UI with no design pass
+  is the failure mode we're trying to avoid.
+- **Any non-trivial code change** → `code-reviewer` as the final gate (per §7 below).
+- **Schema, architecture, or data-model decisions** → `nextjs-architect` or `backend-engineer`.
+- **Anything touching requirements or scope** → `requirements-critic`.
+
+Judgment still applies — don't spawn an agent for a typo, a one-line copy tweak, or a
+question Nand asked you directly. Agent teams are enabled
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), so for work that benefits from several
+perspectives arguing with each other — a design review, competing debugging hypotheses —
+spawn them as a **team** by name so they can message each other, rather than as isolated
+subagents that only report back. 3–5 teammates is the sweet spot; they cost significantly
+more tokens than a single session, so match the team size to the stakes.
+
 ## 5. Connected tools available to agents
 
 - **Canva MCP** — design generation, brand kits, exports. Used by the Stage 2 design team.
