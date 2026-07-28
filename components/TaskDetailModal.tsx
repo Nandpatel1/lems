@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Send, Check, Trash2 } from "lucide-react";
+import { Send, Check, UserMinus } from "lucide-react";
 import {
   getTaskDetail,
   saveNote,
   addComment,
   completeTask,
-  deleteTask,
+  unassignTask,
   type TaskDetail,
 } from "@/app/actions";
 import Modal from "./Modal";
@@ -158,18 +158,29 @@ export default function TaskDetailModal({
           onClick={() => setConfirmingDelete(true)}
           className="inline-flex items-center gap-1.5 text-[12px] text-danger-ink transition-colors duration-quick hover:underline"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Delete task
+          <UserMinus className="h-3.5 w-3.5" /> Remove from my queue
         </button>
       </div>
       </Modal>
 
       {confirmingDelete && (
         <ConfirmDialog
-          title="Delete task"
-          message="This permanently removes the task and its comments. This can't be undone."
-          confirmLabel="Delete task"
+          title="Remove from your queue"
+          message={
+            <>
+              Take <span className="font-medium text-ink">&quot;{title}&quot;</span> off your
+              plate?
+              <span className="mt-2 block">
+                It stays in the Library, so it can be assigned again any time.
+              </span>
+              <span className="mt-2 block text-ink-3">
+                Your notes and the comments on it are removed.
+              </span>
+            </>
+          }
+          confirmLabel="Remove"
           onConfirm={async () => {
-            const res = await deleteTask(taskId);
+            const res = await unassignTask(taskId);
             if (res.ok) onClose();
             return res;
           }}

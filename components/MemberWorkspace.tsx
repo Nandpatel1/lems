@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Check,
@@ -10,11 +11,19 @@ import {
   Moon,
   Send,
   Bell,
-  MessageCircle,
   FileText,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
-import { getTaskDetail, addComment, pokeTeammate, type MemberTaskRow } from "@/app/actions";
-import { waMeUrl } from "@/lib/wa";
+import {
+  getTaskDetail,
+  addComment,
+  pokeTeammate,
+  unassignTask,
+  type MemberTaskRow,
+} from "@/app/actions";
+import AssignWorkModal from "./AssignWorkModal";
+import ConfirmDialog from "./ConfirmDialog";
 
 type Comment = { id: string; author: string; body: string; createdAt: string };
 
@@ -52,6 +61,7 @@ export default function MemberWorkspace({
   currentUid: string | null;
   tasks: MemberTaskRow[];
 }) {
+  const router = useRouter();
   const isSelf = member.id === currentUid;
   const active = tasks.filter((t) => t.state !== "complete");
   const completed = tasks.filter((t) => t.state === "complete");
@@ -65,6 +75,9 @@ export default function MemberWorkspace({
 
   const [nudgeMsg, setNudgeMsg] = useState("");
   const [nudgeSent, setNudgeSent] = useState(false);
+
+  const [assigning, setAssigning] = useState(false);
+  const [confirmUnassign, setConfirmUnassign] = useState<MemberTaskRow | null>(null);
 
   useEffect(() => {
     if (!selectedId) {
@@ -125,6 +138,16 @@ export default function MemberWorkspace({
             {completed.length} shipped · {active.length} active
           </p>
         </div>
+        <button
+          onClick={() => setAssigning(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-control bg-accent px-3 py-2 text-[12px] font-medium text-white transition-transform duration-quick active:scale-[0.98]"
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">
+            {isSelf ? "Assign to me" : `Assign to ${member.name}`}
+          </span>
+          <span className="sm:hidden">Assign</span>
+        </button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[300px_1fr]">
@@ -149,8 +172,26 @@ export default function MemberWorkspace({
         {/* Right: detail */}
         <div className="rounded-card border border-hair bg-surface p-4">
           {!selected ? (
-            <div className="grid min-h-[220px] place-items-center text-center">
-              <p className="text-[13px] text-ink-3">Select a task to review it.</p>
+            <div className="grid min-h-[220px] place-items-center px-4 text-center">
+              {tasks.length === 0 ? (
+                <div>
+                  <p className="text-[14px] font-medium text-ink">
+                    {isSelf ? "Nothing on your plate" : `${member.name} has nothing yet`}
+                  </p>
+                  <p className="mx-auto mt-1 max-w-xs text-[12px] text-ink-2">
+                    Pull something across from the Library to get started.
+                  </p>
+                  <button
+                    onClick={() => setAssigning(true)}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-control bg-accent px-3.5 py-2 text-[12px] font-medium text-white transition-transform duration-quick active:scale-[0.98]"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    {isSelf ? "Assign to me" : `Assign to ${member.name}`}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[13px] text-ink-3">Select a task to review it.</p>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -263,29 +304,76 @@ export default function MemberWorkspace({
                     >
                       <Bell className="h-3.5 w-3.5" /> Send
                     </button>
-                    <a
-                      href={waMeUrl(
-                        `Nudge for ${member.name}: ${
-                          nudgeMsg.trim() || `how's "${selected.title}" going?`
-                        }`
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Nudge on WhatsApp"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-hair-strong bg-surface text-ship-ink transition-colors duration-quick hover:bg-surface-soft"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                    </a>
                   </div>
                   {nudgeSent && (
                     <p className="mt-1.5 text-[11px] text-ship-ink">Nudge sent.</p>
                   )}
                 </div>
               )}
+
+              {/* Unassign — last, and quiet: it's reversible in the sense that
+                  the resource stays in the Library and can be re-assigned. */}
+              <div className="border-t border-hair pt-3">
+                <button
+                  onClick={() => setConfirmUnassign(selected)}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-danger-ink transition-colors duration-quick hover:underline"
+                >
+                  <UserMinus className="h-3.5 w-3.5" />
+                  {isSelf ? "Remove from my queue" : `Unassign from ${member.name}`}
+                </button>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {assigning && (
+        <AssignWorkModal
+          member={member}
+          isSelf={isSelf}
+          onClose={() => setAssigning(false)}
+          onAssigned={() => router.refresh()}
+        />
+      )}
+
+      {confirmUnassign && (
+        <ConfirmDialog
+          title={isSelf ? "Remove from your queue" : `Unassign from ${member.name}`}
+          confirmLabel={isSelf ? "Remove" : "Unassign"}
+          message={
+            <>
+              Take{" "}
+              <span className="font-medium text-ink">
+                &quot;{confirmUnassign.title}&quot;
+              </span>{" "}
+              off {isSelf ? "your" : `${member.name}'s`} plate?
+              <span className="mt-2 block">
+                It stays in the Library, so it can be assigned again any time
+                {isSelf ? "" : " — to them or anyone else"}.
+              </span>
+              <span className="mt-2 block text-ink-3">
+                {confirmUnassign.state === "complete" ? (
+                  <span className="text-danger-ink">
+                    This one is already complete — unassigning drops it from the
+                    shipped count, along with any notes and comments on it.
+                  </span>
+                ) : (
+                  "Any notes and comments on it are removed."
+                )}
+              </span>
+            </>
+          }
+          onConfirm={async () => {
+            const res = await unassignTask(confirmUnassign.id);
+            if (res.ok) {
+              setSelectedId(null);
+              router.refresh();
+            }
+            return res;
+          }}
+          onClose={() => setConfirmUnassign(null)}
+        />
+      )}
     </div>
   );
 }

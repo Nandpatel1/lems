@@ -7,12 +7,15 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel = "Delete",
+  disabled = false,
   onConfirm,
   onClose,
 }: {
   title: string;
   message: React.ReactNode;
   confirmLabel?: string;
+  /** Hold the confirm until the caller knows what the deletion will affect. */
+  disabled?: boolean;
   onConfirm: () => Promise<{ ok: boolean; error?: string }>;
   onClose: () => void;
 }) {
@@ -20,6 +23,7 @@ export default function ConfirmDialog({
   const [error, setError] = useState<string | null>(null);
 
   function go() {
+    if (disabled || pending) return;
     setError(null);
     startTransition(async () => {
       const res = await onConfirm();
@@ -41,7 +45,7 @@ export default function ConfirmDialog({
         </button>
         <button
           onClick={go}
-          disabled={pending}
+          disabled={pending || disabled}
           className="rounded-control bg-danger px-4 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-60"
         >
           {pending ? "Deleting…" : confirmLabel}

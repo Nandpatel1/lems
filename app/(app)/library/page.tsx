@@ -7,9 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
   const [libraryFolders, profiles] = await Promise.all([getLibrary(), getProfiles()]);
-  const folderOpts = libraryFolders
-    .filter((f) => f.id !== "__unfiled__")
-    .map((f) => ({ id: f.id, name: f.name }));
+  const folderOpts = libraryFolders.map((f) => ({ id: f.id, name: f.name }));
   const members = profiles.map((p) => ({ id: p.id, name: p.name }));
 
   return (

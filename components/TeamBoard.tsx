@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { TeamMember } from "@/lib/types";
-import NudgeButton from "./NudgeButton";
 import MemberTasksModal from "./MemberTasksModal";
 
 export default function TeamBoard({
@@ -54,12 +53,8 @@ export default function TeamBoard({
               <p className="text-[12px] text-ink">{m.focus}</p>
             </div>
 
-            {m.id === currentUid ? (
+            {m.id === currentUid && (
               <p className="mt-3 text-[11px] text-ink-3">This is you · tap to review</p>
-            ) : (
-              <div onClick={(e) => e.stopPropagation()}>
-                <NudgeButton memberId={m.id} memberName={m.name} focus={m.focus} />
-              </div>
             )}
           </section>
         ))}

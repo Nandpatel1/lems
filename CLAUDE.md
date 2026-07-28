@@ -35,6 +35,7 @@ experience good enough that we stay **consistent**.
   dependencies and progression, not just flat tags).
 - **Accountability layer** — reminders and notifications (in-app, email, WhatsApp) whose
   purpose is *positive pressure* so work gets done on time, plus visible progress tracking.
+  *Currently in-app only — see the WhatsApp note under "Current stage" below.*
 - **Team member** — one of the 3–4 founders; can be owner, assignee, or reviewer.
 
 ## 3. The three stages (we build in this order — do not skip ahead)
@@ -54,6 +55,11 @@ Current stage: **Stage 3 — Engineering.** Stages 1 & 2 signed off ✅ (`/docs/
 (sidebar↔bottom-nav). Carry-ins: (1) define launch-readiness % with team-editable milestones,
 (2) transparent+overridable "your one thing", (3) keep dashboard supportive/self-facing.
 Engineering artifacts → `/docs/engineering/` and the app itself.
+
+**Nudges are in-app only (decided 2026-07-28).** WhatsApp was removed from the frontend —
+the "Nudge the team" button, the per-member WhatsApp link, `WaNudge`, `NudgeButton` and
+`lib/wa.ts` are all gone. Email was never wired up. Don't re-add either without Nand asking;
+he'll say if/when it's wanted back. The `pokeTeammate` → bell-notification path is unaffected.
 
 ## 4. Specialized agent teams
 

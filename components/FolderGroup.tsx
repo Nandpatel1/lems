@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText, Trash2 } from "lucide-react";
 import type { LibraryFolder, Resource } from "@/lib/types";
 import AssignControl from "./AssignControl";
@@ -11,10 +11,13 @@ import {
   assignFolderToMember,
   deleteFolder,
   deleteResource,
-  deleteUnfiledResources,
+  getFolderDeletionImpact,
+  getResourceDeletionImpact,
+  type DeletionImpact,
 } from "@/app/actions";
 
 type Member = { id: string; name: string };
+type DeleteKind = "folder" | "resource";
 
 export default function FolderGroup({
   folder,
@@ -27,8 +30,6 @@ export default function FolderGroup({
   const [detail, setDetail] = useState<Resource | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmResource, setConfirmResource] = useState<Resource | null>(null);
-  const [confirmClearUnfiled, setConfirmClearUnfiled] = useState(false);
-  const isUnfiled = folder.id === "__unfiled__";
 
   return (
     <section className="overflow-hidden rounded-card border border-hair bg-surface">
@@ -59,34 +60,21 @@ export default function FolderGroup({
         <span className="text-[14px] font-medium text-ink">{folder.name}</span>
         <span className="ml-auto flex items-center gap-3">
           <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
-          {isUnfiled ? (
-            folder.resources.length > 0 && (
-              <span onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => setConfirmClearUnfiled(true)}
-                  className="inline-flex items-center gap-1 rounded-chip border border-hair-strong bg-surface px-2 py-1 text-[11px] text-danger-ink transition-colors duration-quick hover:border-danger hover:bg-danger-tint"
-                >
-                  <Trash2 className="h-3 w-3" /> Clear all
-                </button>
-              </span>
-            )
-          ) : (
-            <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <AssignControl
-                members={members}
-                heading={`Assign all of "${folder.name}"`}
-                triggerLabel="Assign folder"
-                onAssign={(o, d) => assignFolderToMember(folder.id, o, d)}
-              />
-              <button
-                onClick={() => setConfirmingDelete(true)}
-                aria-label="Delete folder"
-                className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          )}
+          <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <AssignControl
+              members={members}
+              heading={`Assign all of "${folder.name}"`}
+              triggerLabel="Assign folder"
+              onAssign={(o, d) => assignFolderToMember(folder.id, o, d)}
+            />
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              aria-label="Delete folder"
+              className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </span>
         </span>
       </div>
 
@@ -147,51 +135,114 @@ export default function FolderGroup({
       )}
 
       {confirmingDelete && (
-        <ConfirmDialog
-          title="Delete folder"
-          message={
-            <>
-              Delete <span className="font-medium text-ink">&quot;{folder.name}&quot;</span> and
-              its {folder.resources.length} resource
-              {folder.resources.length === 1 ? "" : "s"}? Any tasks created from this folder are
-              removed too. This can&apos;t be undone.
-            </>
-          }
-          confirmLabel="Delete folder"
+        <DeleteConfirm
+          kind="folder"
+          id={folder.id}
+          name={folder.name}
           onConfirm={() => deleteFolder(folder.id)}
           onClose={() => setConfirmingDelete(false)}
         />
       )}
 
       {confirmResource && (
-        <ConfirmDialog
-          title="Delete resource"
-          message={
-            <>
-              Delete <span className="font-medium text-ink">&quot;{confirmResource.title}&quot;</span>{" "}
-              from the library? This can&apos;t be undone.
-            </>
-          }
-          confirmLabel="Delete resource"
+        <DeleteConfirm
+          kind="resource"
+          id={confirmResource.id}
+          name={confirmResource.title}
           onConfirm={() => deleteResource(confirmResource.id)}
           onClose={() => setConfirmResource(null)}
         />
       )}
-
-      {confirmClearUnfiled && (
-        <ConfirmDialog
-          title="Clear unfiled resources"
-          message={
-            <>
-              Delete all {folder.resources.length} unfiled resource
-              {folder.resources.length === 1 ? "" : "s"}? This can&apos;t be undone.
-            </>
-          }
-          confirmLabel="Delete all"
-          onConfirm={() => deleteUnfiledResources()}
-          onClose={() => setConfirmClearUnfiled(false)}
-        />
-      )}
     </section>
+  );
+}
+
+/** Deleting from the library now cascades to everyone's assigned tasks, so
+ *  say exactly who and what it takes down before the button is live. */
+function DeleteConfirm({
+  kind,
+  id,
+  name,
+  onConfirm,
+  onClose,
+}: {
+  kind: DeleteKind;
+  id: string;
+  name: string;
+  onConfirm: () => Promise<{ ok: boolean; error?: string }>;
+  onClose: () => void;
+}) {
+  const [impact, setImpact] = useState<DeletionImpact | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const load =
+      kind === "folder" ? getFolderDeletionImpact(id) : getResourceDeletionImpact(id);
+    load.then((i) => {
+      if (live) setImpact(i);
+    });
+    return () => {
+      live = false;
+    };
+  }, [kind, id]);
+
+  const label = kind === "folder" ? "Delete folder" : "Delete resource";
+
+  return (
+    <ConfirmDialog
+      title={label}
+      confirmLabel={label}
+      disabled={impact === null}
+      message={
+        <>
+          Delete <span className="font-medium text-ink">&quot;{name}&quot;</span>
+          {kind === "folder" ? " and everything inside it" : " from the library"}?
+          {impact === null ? (
+            <span className="mt-2 block text-ink-3">Checking what this affects…</span>
+          ) : (
+            <span className="mt-2 block">
+              <ImpactLine kind={kind} impact={impact} />
+            </span>
+          )}
+          <span className="mt-2 block text-ink-3">This can&apos;t be undone.</span>
+        </>
+      }
+      onConfirm={onConfirm}
+      onClose={onClose}
+    />
+  );
+}
+
+function ImpactLine({ kind, impact }: { kind: DeleteKind; impact: DeletionImpact }) {
+  const resources =
+    kind === "folder"
+      ? `${impact.resources} resource${impact.resources === 1 ? "" : "s"}`
+      : null;
+
+  if (impact.tasks === 0) {
+    return (
+      <>
+        {resources ? `Removes ${resources}. ` : ""}Nobody has been assigned{" "}
+        {kind === "folder" ? "anything from it" : "this"} yet.
+      </>
+    );
+  }
+
+  return (
+    <>
+      Also removes {resources ? `${resources} and ` : ""}
+      <span className="font-medium text-ink">
+        {impact.tasks} assigned task{impact.tasks === 1 ? "" : "s"}
+      </span>{" "}
+      across {impact.people} {impact.people === 1 ? "person" : "people"}
+      {impact.completed > 0 && (
+        <span className="text-danger-ink">
+          {" "}
+          — including {impact.completed} already completed, so that shipped credit
+          disappears from their Team page too
+        </span>
+      )}
+      .
+    </>
   );
 }

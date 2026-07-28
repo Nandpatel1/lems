@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { getTeam } from "@/lib/data";
 import { getCurrentUserId } from "@/lib/session";
-import WaNudge from "@/components/WaNudge";
 
 export const dynamic = "force-dynamic";
 
@@ -12,17 +11,11 @@ export default async function TeamPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[20px] font-medium text-ink">Team</h1>
-          <p className="mt-0.5 text-[12px] text-ink-3">
-            Three people, building together. Open a card to review anyone&apos;s work.
-          </p>
-        </div>
-        <WaNudge
-          text={`Team check-in: we've shipped ${weeklyShipped} things this week on the road to launch. Let's keep the momentum — what are you shipping today?`}
-          label="Nudge the team"
-        />
+      <div>
+        <h1 className="text-[20px] font-medium text-ink">Team</h1>
+        <p className="mt-0.5 text-[12px] text-ink-3">
+          Three people, building together. Open a card to review anyone&apos;s work.
+        </p>
       </div>
 
       <div className="flex items-center gap-3 rounded-card border border-hair bg-surface px-4 py-3">

@@ -200,24 +200,14 @@ export async function getLibrary(): Promise<LibraryFolder[]> {
       description: r.description ?? undefined,
     });
 
-    const groups: LibraryFolder[] = folders.map((f: any) => ({
+    // resources.folder_id is NOT NULL, so every resource lands in a group —
+    // there is no "Unfiled" bucket to fall through to.
+    return folders.map((f: any) => ({
       id: f.id,
       name: f.name,
       ordered: f.ordered,
       resources: resources.filter((r: any) => r.folder_id === f.id).map(mapRes),
     }));
-
-    const orphans = resources.filter((r: any) => !r.folder_id);
-    if (orphans.length > 0) {
-      groups.push({
-        id: "__unfiled__",
-        name: "Unfiled",
-        ordered: false,
-        resources: orphans.map(mapRes),
-      });
-    }
-
-    return groups;
   } catch {
     return seed.libraryFolders;
   }

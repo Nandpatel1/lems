@@ -2,6 +2,29 @@
 
 > Derived from the Stage 1 system model + Stage 2 needs. Postgres via Supabase, modeled in
 > Drizzle. Relational, with the roll-ups/ratios/readiness computed by query.
+>
+> **This document is the target model.** For what is actually in the database today —
+> including the referential-integrity guarantees summarized below — see `supabase/README.md`
+> and `supabase/setup.sql`, which are the source of truth.
+
+## Referential integrity (as built)
+
+The Library is the single source of truth for assigned work. These are enforced by
+constraints and triggers, not by application code, so no code path can produce an
+inconsistent state:
+
+- `tasks.resource_id` is **`NOT NULL`** — a task is a resource assigned to someone, so a task
+  outside the Library is not representable. The Library is therefore the complete index of the
+  team's work.
+- `tasks.resource_id` → `resources` **on delete cascade**, and `resources.folder_id` →
+  `folders` **on delete cascade**. Deleting a resource removes every task assigned from it
+  (and their comments and notifications) atomically; deleting a folder cascades through its
+  resources to those tasks. There is no window in which a task outlives its resource.
+- `unique (owner_id, resource_id)` — one task per person per resource. Assignment is
+  therefore idempotent and race-free (the app upserts rather than read-then-write).
+- Trigger-synced identity: a task's `title`, `type`, `source` and `folder_id` always mirror
+  its resource; state, deadline, note and applied belong to the task.
+- `resources.folder_id` and `tasks.owner_id` are `NOT NULL` — no unfiled or unowned limbo.
 
 ## Enums
 - `item_type`: `learn` | `build`
