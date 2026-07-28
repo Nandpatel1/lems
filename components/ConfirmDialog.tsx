@@ -7,6 +7,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel = "Delete",
+  pendingLabel = "Deleting…",
   disabled = false,
   onConfirm,
   onClose,
@@ -14,6 +15,9 @@ export default function ConfirmDialog({
   title: string;
   message: React.ReactNode;
   confirmLabel?: string;
+  /** In-flight label. Override it when the action isn't a deletion — saying
+   *  "Deleting…" would contradict a dialog that just promised otherwise. */
+  pendingLabel?: string;
   /** Hold the confirm until the caller knows what the deletion will affect. */
   disabled?: boolean;
   onConfirm: () => Promise<{ ok: boolean; error?: string }>;
@@ -48,7 +52,7 @@ export default function ConfirmDialog({
           disabled={pending || disabled}
           className="rounded-control bg-danger px-4 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-60"
         >
-          {pending ? "Deleting…" : confirmLabel}
+          {pending ? pendingLabel : confirmLabel}
         </button>
       </div>
     </Modal>
