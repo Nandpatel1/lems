@@ -45,7 +45,8 @@ function friendlyError(err: { code?: string; message: string }): string {
 /** Take a task off someone's plate. A task IS the assignment (person ×
  *  resource), so unassigning is removing the row — the resource itself stays
  *  in the Library and can be assigned again, to them or anyone else. Their
- *  notes and the comment thread go with it. */
+ *  personal notes go with it; the discussion does not, because it hangs off
+ *  the work and outlives whoever was holding it. */
 export async function unassignTask(taskId: string): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
@@ -361,27 +362,56 @@ export interface TaskDetail {
   state: string;
   canComplete: boolean;
   comments: TaskComment[];
+  /** Everyone holding this work, in name order — the people who share the
+   *  discussion. Named in the UI so it's obvious the thread isn't private. */
+  assignees: { id: string; name: string; initial: string }[];
 }
 
-/** Load a task's note, status, and comment thread. */
+const EMPTY_DETAIL: TaskDetail = {
+  note: null,
+  type: "learn",
+  state: "todo",
+  canComplete: false,
+  comments: [],
+  assignees: [],
+};
+
+/** Load a task's own note and status, plus the discussion — which belongs to
+ *  the underlying resource, so everyone assigned the same work reads and
+ *  writes the same thread. */
 export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   const db = supabaseAdmin();
-  if (!db)
-    return { note: null, type: "learn", state: "todo", canComplete: false, comments: [] };
-  const [{ data: task }, { data: comments }] = await Promise.all([
-    db.from("tasks").select("note, type, state, is_folder").eq("id", taskId).single(),
+  if (!db) return EMPTY_DETAIL;
+
+  const { data: task } = await db
+    .from("tasks")
+    .select("note, type, state, is_folder, resource_id")
+    .eq("id", taskId)
+    .single();
+  if (!task) return EMPTY_DETAIL;
+
+  const [{ data: comments }, { data: holders }] = await Promise.all([
     db
       .from("comments")
       .select("id, body, created_at, author_id, author:profiles(name, initial)")
-      .eq("task_id", taskId)
+      .eq("resource_id", task.resource_id)
       .order("created_at", { ascending: true }),
+    db
+      .from("tasks")
+      .select("owner:profiles(id, name, initial)")
+      .eq("resource_id", task.resource_id),
   ]);
-  const state = task?.state ?? "todo";
+
+  const state = task.state ?? "todo";
   return {
-    note: task?.note ?? null,
-    type: (task?.type as ItemType) ?? "learn",
+    note: task.note ?? null,
+    type: (task.type as ItemType) ?? "learn",
     state,
-    canComplete: state !== "complete" && !task?.is_folder,
+    canComplete: state !== "complete" && !task.is_folder,
+    assignees: (holders ?? [])
+      .map((h: any) => (Array.isArray(h.owner) ? h.owner[0] : h.owner))
+      .filter(Boolean)
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)),
     comments: (comments ?? []).map((c: any) => {
       const author = Array.isArray(c.author) ? c.author[0] : c.author;
       const name = author?.name ?? "Someone";
@@ -415,23 +445,25 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
   if (!db) return [];
   const { data } = await db
     .from("tasks")
-    .select("id, title, type, state, deadline, note, is_folder")
+    .select("id, title, type, state, deadline, note, is_folder, resource_id")
     .eq("owner_id", memberId)
     .order("created_at", { ascending: false });
   const tasks = data ?? [];
 
   // One extra round trip for the whole rail, counted here rather than as a
-  // per-row aggregate — this list is one person's queue, not a feed.
+  // per-row aggregate — this list is one person's queue, not a feed. Counts
+  // are per resource, so the number matches the shared thread they'll open.
   const counts = new Map<string, number>();
   if (tasks.length > 0) {
     const { data: rows } = await db
       .from("comments")
-      .select("task_id")
+      .select("resource_id")
       .in(
-        "task_id",
-        tasks.map((t: any) => t.id)
+        "resource_id",
+        tasks.map((t: any) => t.resource_id)
       );
-    for (const r of rows ?? []) counts.set(r.task_id, (counts.get(r.task_id) ?? 0) + 1);
+    for (const r of rows ?? [])
+      counts.set(r.resource_id, (counts.get(r.resource_id) ?? 0) + 1);
   }
 
   return tasks.map((t: any) => ({
@@ -442,7 +474,7 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
     deadline: t.deadline ?? null,
     note: t.note ?? null,
     isFolder: t.is_folder ?? false,
-    commentCount: counts.get(t.id) ?? 0,
+    commentCount: counts.get(t.resource_id) ?? 0,
   }));
 }
 
@@ -455,77 +487,97 @@ export async function saveNote(taskId: string, note: string): Promise<ActionResu
   return { ok: true };
 }
 
-/** Everyone a new comment concerns: the person the task belongs to, plus
+/** Everyone a new comment concerns: everyone the work is assigned to, plus
  *  anyone already in the thread — minus whoever just wrote it.
  *
- *  A task is one person × one resource, so a thread is about *that* person's
- *  copy of the work. Two people holding the same resource have two separate
- *  threads, and a comment on one is deliberately not news to the other. What
- *  makes a thread multi-party is people joining it, which is exactly what
- *  reading the comment authors captures.
+ *  The thread belongs to the resource, so all its assignees are in the same
+ *  conversation by definition. Past commenters are added on top: someone who
+ *  weighed in and has since been unassigned still gets the reply to their
+ *  question.
+ *
+ *  Each recipient's notification points at *their own* task row for the work,
+ *  so opening it lands them in their own workspace. The thread reads the same
+ *  from anywhere, so the fallback for a commenter who holds no copy is simply
+ *  somebody else's.
  *
  *  Best-effort throughout: a comment that saved must not report failure
  *  because notifying somebody about it didn't. */
 async function notifyComment(
   db: NonNullable<ReturnType<typeof supabaseAdmin>>,
-  taskId: string,
+  resourceId: string,
   body: string,
   authorId: string
 ) {
   try {
-    const [{ data: task }, { data: thread }] = await Promise.all([
-      db.from("tasks").select("owner_id").eq("id", taskId).single(),
-      db.from("comments").select("author_id").eq("task_id", taskId),
+    const [{ data: holders }, { data: thread }] = await Promise.all([
+      db.from("tasks").select("id, owner_id").eq("resource_id", resourceId),
+      db.from("comments").select("author_id").eq("resource_id", resourceId),
     ]);
 
-    const recipients = new Set<string>();
-    if (task?.owner_id) recipients.add(task.owner_id);
+    const taskFor = new Map<string, string>();
+    for (const t of holders ?? []) if (t.owner_id) taskFor.set(t.owner_id, t.id);
+
+    const recipients = new Set<string>(taskFor.keys());
     for (const c of thread ?? []) if (c.author_id) recipients.add(c.author_id);
     recipients.delete(authorId);
     if (recipients.size === 0) return;
 
-    const ids = [...recipients];
+    const anyTask = holders?.[0]?.id ?? null;
+    const rows = [...recipients].map((id) => ({
+      recipient_id: id,
+      actor_id: authorId,
+      type: "comment",
+      task_id: taskFor.get(id) ?? anyTask,
+      body,
+    }));
 
     // One live row per thread per person. Ten comments overnight should read
     // as one thread to catch up on, not ten things to dismiss — so the unread
     // ones are replaced by the newest rather than stacked on top of.
-    await db
-      .from("notifications")
-      .delete()
-      .in("recipient_id", ids)
-      .eq("task_id", taskId)
-      .eq("type", "comment")
-      .eq("read", false);
+    const taskIds = [...new Set(rows.map((r) => r.task_id).filter(Boolean))] as string[];
+    if (taskIds.length > 0) {
+      await db
+        .from("notifications")
+        .delete()
+        .in("recipient_id", [...recipients])
+        .in("task_id", taskIds)
+        .eq("type", "comment")
+        .eq("read", false);
+    }
 
-    await db.from("notifications").insert(
-      ids.map((id) => ({
-        recipient_id: id,
-        actor_id: authorId,
-        type: "comment",
-        task_id: taskId,
-        body,
-      }))
-    );
+    await db.from("notifications").insert(rows);
   } catch {
     // Swallowed on purpose — see the doc comment above.
   }
 }
 
-/** Add a comment to a task's thread, and tell the people it concerns. */
+/** Post to a work item's discussion, and tell the people it concerns.
+ *  Callers hold a task id (that's what's on screen); the thread it resolves to
+ *  is the resource's, shared with everyone else assigned the same work. */
 export async function addComment(taskId: string, body: string): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
   const trimmed = body.trim();
   if (!trimmed) return { ok: false, error: "Empty comment" };
+
+  const { data: task } = await db
+    .from("tasks")
+    .select("resource_id")
+    .eq("id", taskId)
+    .single();
+  if (!task?.resource_id)
+    return { ok: false, error: "That task was just removed. Refresh and try again." };
+
   const me = await currentUid();
   const { error } = await db.from("comments").insert({
-    task_id: taskId,
+    resource_id: task.resource_id,
     author_id: me,
     body: trimmed,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: friendlyError(error) };
 
-  await notifyComment(db, taskId, trimmed, me);
+  await notifyComment(db, task.resource_id, trimmed, me);
+  revalidateAll();
   return { ok: true };
 }
 

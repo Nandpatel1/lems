@@ -84,9 +84,12 @@ create table tasks (
   constraint tasks_owner_resource_uniq unique nulls distinct (owner_id, resource_id)
 );
 
+-- The discussion hangs off the work, not off who's holding it. A resource
+-- assigned to three people is still one thread that all three see and write
+-- to; unassigning someone leaves it intact.
 create table comments (
   id uuid primary key default gen_random_uuid(),
-  task_id uuid not null references tasks(id) on delete cascade,
+  resource_id uuid not null references resources(id) on delete cascade,
   author_id uuid references profiles(id) on delete set null,
   body text not null,
   created_at timestamptz not null default now()
@@ -108,13 +111,13 @@ create index tasks_resource_id_idx       on tasks (resource_id);
 create index tasks_folder_id_idx         on tasks (folder_id);
 create index tasks_owner_id_idx          on tasks (owner_id);
 create index resources_folder_id_idx     on resources (folder_id);
-create index comments_task_id_idx        on comments (task_id);
+create index comments_resource_id_idx    on comments (resource_id);
 create index notifications_task_id_idx   on notifications (task_id);
 create index notifications_recipient_idx on notifications (recipient_id, created_at desc);
 -- The comment fan-out collapses a thread's unread rows before inserting the
 -- newest one, and works out who's in a thread by reading its comment authors.
 create index notifications_thread_unread_idx on notifications (recipient_id, task_id) where read = false;
-create index comments_task_author_idx        on comments (task_id, author_id);
+create index comments_resource_author_idx    on comments (resource_id, author_id);
 
 -- ---------- identity stays in sync with the library, in both directions ----------
 create or replace function tasks_sync_from_resource() returns trigger

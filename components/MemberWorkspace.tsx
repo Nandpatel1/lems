@@ -10,7 +10,6 @@ import {
   Circle,
   Folder,
   Moon,
-  Send,
   MessageSquare,
   FileText,
   UserMinus,
@@ -22,8 +21,10 @@ import {
   unassignTask,
   type MemberTaskRow,
   type TaskComment,
+  type TaskDetail,
 } from "@/app/actions";
 import ConfirmDialog from "./ConfirmDialog";
+import Discussion from "./Discussion";
 import TypeChip from "./TypeChip";
 
 /** How long the removed row takes to collapse. Matches `duration-base`. */
@@ -34,14 +35,6 @@ const NOTICE_MS = 4200;
  *  catch the eye mid-scroll, short enough not to become part of the design. */
 const ARRIVE_MS = 1800;
 
-/** Recent comments read better as elapsed time; older ones as a date. */
-function commentTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 function dueLabel(deadline: string | null): { text: string; overdue: boolean } | null {
   if (!deadline) return null;
@@ -101,7 +94,8 @@ export default function MemberWorkspace({
   });
 
   const [comments, setComments] = useState<TaskComment[] | null>(null);
-  const [comment, setComment] = useState("");
+  /** Who else holds this work — the people the discussion is shared with. */
+  const [assignees, setAssignees] = useState<TaskDetail["assignees"]>([]);
   const [pending, startTransition] = useTransition();
 
   /** The row a notification just pointed at, ringed briefly so the jump lands
@@ -119,7 +113,6 @@ export default function MemberWorkspace({
   const [liveMsg, setLiveMsg] = useState("");
 
   const paneRef = useRef<HTMLDivElement>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Read inside the focus effect without making it re-run whenever the rail
   // refreshes — the effect is about the notification, not the task list.
@@ -195,36 +188,30 @@ export default function MemberWorkspace({
   useEffect(() => {
     if (!selectedId) {
       setComments([]);
+      setAssignees([]);
       return;
     }
     let live = true;
     setComments(null);
     getTaskDetail(selectedId).then((d) => {
-      if (live) setComments(d.comments);
+      if (!live) return;
+      setComments(d.comments);
+      setAssignees(d.assignees);
     });
     return () => {
       live = false;
     };
   }, [selectedId]);
 
-  /** The thread reads oldest-first, so the newest message is the one you want
-   *  to land on — same as any chat. */
-  useEffect(() => {
-    if (!comments || comments.length === 0) return;
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [comments]);
-
-  function submitComment() {
-    if (!selectedId || !comment.trim()) return;
-    const body = comment.trim();
-    setComment("");
+  function submitComment(body: string) {
+    if (!selectedId) return;
     startTransition(async () => {
       await addComment(selectedId, body);
       const d = await getTaskDetail(selectedId);
       setComments(d.comments);
-      // The rail's comment count came from the server render — bring it back
-      // in step now that this thread has one more.
+      setAssignees(d.assignees);
+      // The rail's counts came from the server render — bring them back in
+      // step now the thread has one more entry.
       router.refresh();
     });
   }
@@ -397,101 +384,13 @@ export default function MemberWorkspace({
                 )}
               </div>
 
-              {/* Comments — the thread a notification brings you back to, so
-                  it has to read as a conversation, not a list of rows. */}
-              <div>
-                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-3">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Comments
-                  {comments && comments.length > 0 && (
-                    <span className="tabular-nums">· {comments.length}</span>
-                  )}
-                </p>
-
-                {/* Capped and scrolled: a long thread must not push the
-                    composer off the bottom of the pane. */}
-                <div
-                  ref={threadRef}
-                  className="flex max-h-[19rem] flex-col gap-2.5 overflow-y-auto"
-                >
-                  {comments === null ? (
-                    <p className="text-[12px] text-ink-3">Loading…</p>
-                  ) : comments.length === 0 ? (
-                    <p className="rounded-control border border-dashed border-hair px-3 py-2.5 text-[12px] text-ink-3">
-                      No comments yet —{" "}
-                      {isSelf
-                        ? "nobody's weighed in on this one."
-                        : `start the thread with ${member.name}.`}
-                    </p>
-                  ) : (
-                    comments.map((c) => {
-                      const mine = Boolean(currentUid && c.authorId === currentUid);
-                      return (
-                        <div key={c.id} className="flex gap-2">
-                          <span
-                            aria-hidden="true"
-                            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-medium ${
-                              mine
-                                ? "bg-accent-tint text-accent-ink"
-                                : "bg-surface-soft text-ink-2"
-                            }`}
-                          >
-                            {c.authorInitial}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="flex items-baseline gap-1.5 text-[11px]">
-                              <span className="font-medium text-ink-2">
-                                {mine ? "You" : c.author}
-                              </span>
-                              <span className="text-ink-3">
-                                {commentTime(c.createdAt)}
-                              </span>
-                            </p>
-                            {/* Your own remarks sit in accent, everyone else's
-                                in neutral — so scanning a thread tells you who
-                                is talking before you read a word. */}
-                            <p
-                              className={`mt-1 whitespace-pre-wrap break-words rounded-control px-3 py-2 text-[12px] leading-relaxed text-ink ${
-                                mine ? "bg-accent-tint/50" : "bg-surface-soft"
-                              }`}
-                            >
-                              {c.body}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="mt-2.5 flex items-center gap-2">
-                  <input
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submitComment();
-                    }}
-                    placeholder={
-                      isSelf ? "Add a comment…" : `Reply to ${member.name}…`
-                    }
-                    className="flex-1 rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors duration-quick focus:border-accent"
-                  />
-                  <button
-                    onClick={submitComment}
-                    disabled={pending || !comment.trim()}
-                    aria-label="Send comment"
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent text-white outline-none transition-transform duration-quick focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
-                {!isSelf && (
-                  <p className="mt-1.5 text-[11px] text-ink-3">
-                    {member.name} gets a notification, along with anyone else in this
-                    thread.
-                  </p>
-                )}
-              </div>
+              <Discussion
+                comments={comments}
+                assignees={assignees}
+                currentUid={currentUid}
+                pending={pending}
+                onPost={submitComment}
+              />
 
             </div>
           )}
@@ -515,10 +414,10 @@ export default function MemberWorkspace({
                   {isSelf ? "your" : "their"} shipped count drops from{" "}
                   {completed.length} to {completed.length - 1}
                 </span>
-                , and {isSelf ? "your" : "their"} notes and the comment thread on it
-                are deleted.
+                , and {isSelf ? "your" : "their"} notes on it are deleted.
                 <span className="mt-2 block text-ink-3">
                   The resource stays in the Library and can be assigned again any time.
+                  The discussion belongs to the work, so it stays too.
                 </span>
               </>
             }
@@ -547,8 +446,8 @@ export default function MemberWorkspace({
                 </span>
                 <span className="mt-2 block text-ink-3">
                   {confirmUnassign.note
-                    ? `${isSelf ? "Your" : `${member.name}'s`} notes and the comment thread on it are deleted.`
-                    : "Any comments on it are deleted."}
+                    ? `${isSelf ? "Your" : `${member.name}'s`} notes on it are deleted. The discussion stays — it belongs to the work.`
+                    : "The discussion stays — it belongs to the work, not to who's holding it."}
                 </span>
               </>
             }

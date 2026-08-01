@@ -1,10 +1,11 @@
 import TodayInteractive from "@/components/TodayInteractive";
 import { getToday } from "@/lib/data";
+import { getCurrentUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
-  const data = await getToday();
+  const [data, uid] = await Promise.all([getToday(), getCurrentUserId()]);
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -23,7 +24,7 @@ export default async function TodayPage() {
         </p>
       </div>
 
-      <TodayInteractive tasks={data.tasks} />
+      <TodayInteractive tasks={data.tasks} currentUid={uid} />
 
       <p className="mt-1 text-center text-[12px] italic text-ink-3">
         Learning is the fuel. Shipping is the distance.

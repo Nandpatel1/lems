@@ -8,7 +8,13 @@ import TypeChip from "./TypeChip";
 
 type View = "list" | "folders";
 
-export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
+export default function TodayInteractive({
+  tasks,
+  currentUid,
+}: {
+  tasks: Task[];
+  currentUid: string | null;
+}) {
   const [detail, setDetail] = useState<{ id: string; title: string } | null>(null);
   const [view, setView] = useState<View>("list");
 
@@ -76,6 +82,7 @@ export default function TodayInteractive({ tasks }: { tasks: Task[] }) {
         <TaskDetailModal
           taskId={detail.id}
           title={detail.title}
+          currentUid={currentUid}
           onClose={() => setDetail(null)}
         />
       )}

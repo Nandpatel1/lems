@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Send, Check, UserMinus } from "lucide-react";
+import { Check, UserMinus } from "lucide-react";
 import {
   getTaskDetail,
   saveNote,
@@ -13,6 +13,7 @@ import {
 import type { ItemType } from "@/lib/types";
 import Modal from "./Modal";
 import ConfirmDialog from "./ConfirmDialog";
+import Discussion from "./Discussion";
 import TypeChip from "./TypeChip";
 
 /** The closing question should match the kind of work: asking "what did you
@@ -34,16 +35,17 @@ function notesPrompt(type: ItemType | undefined): string {
 export default function TaskDetailModal({
   taskId,
   title,
+  currentUid,
   onClose,
 }: {
   taskId: string;
   title: string;
+  currentUid: string | null;
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
-  const [comment, setComment] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -67,10 +69,7 @@ export default function TaskDetailModal({
     });
   }
 
-  function submitComment() {
-    if (!comment.trim()) return;
-    const body = comment.trim();
-    setComment("");
+  function submitComment(body: string) {
     startTransition(async () => {
       await addComment(taskId, body);
       const d = await getTaskDetail(taskId);
@@ -128,48 +127,14 @@ export default function TaskDetailModal({
         </button>
       )}
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col border-t border-hair pt-3">
-        <p className="mb-2 text-[11px] text-ink-3">Comments</p>
-        <div className="flex-1 space-y-2 overflow-y-auto">
-          {detail === null ? (
-            <p className="text-[12px] text-ink-3">Loading…</p>
-          ) : detail.comments.length === 0 ? (
-            <p className="text-[12px] text-ink-3">No comments yet.</p>
-          ) : (
-            detail.comments.map((c) => (
-              <div key={c.id} className="rounded-control bg-surface-soft px-3 py-2">
-                <p className="text-[12px] text-ink">{c.body}</p>
-                <p className="mt-0.5 text-[10px] text-ink-3">
-                  {c.author} ·{" "}
-                  {new Date(c.createdAt).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitComment();
-            }}
-            placeholder="Add a comment…"
-            className="flex-1 rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-          />
-          <button
-            onClick={submitComment}
-            disabled={pending || !comment.trim()}
-            aria-label="Send comment"
-            className="grid h-9 w-9 place-items-center rounded-control bg-accent text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="mt-3 border-t border-hair pt-3">
+        <Discussion
+          comments={detail?.comments ?? null}
+          assignees={detail?.assignees ?? []}
+          currentUid={currentUid}
+          pending={pending}
+          onPost={submitComment}
+        />
       </div>
 
       <div className="mt-3 border-t border-hair pt-3">
@@ -193,7 +158,8 @@ export default function TaskDetailModal({
                 It stays in the Library, so it can be assigned again any time.
               </span>
               <span className="mt-2 block text-ink-3">
-                Your notes and the comments on it are removed.
+                Your notes on it are removed. The discussion stays — it belongs to the
+                work, not to who&apos;s holding it.
               </span>
             </>
           }
