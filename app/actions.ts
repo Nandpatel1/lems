@@ -512,8 +512,10 @@ async function notifyComment(
     }));
 
     // One live row per thread per person. Ten comments overnight should read
-    // as one thread to catch up on, not ten things to dismiss — so the unread
-    // ones are replaced by the newest rather than stacked on top of.
+    // as one thread to catch up on, not ten things to dismiss — so an
+    // outstanding notification for this thread is replaced by the newest
+    // rather than stacked on top of. Anything still listed is by definition
+    // outstanding: opening or dismissing one deletes it.
     const taskIds = [...new Set(rows.map((r) => r.task_id).filter(Boolean))] as string[];
     if (taskIds.length > 0) {
       await db
@@ -521,8 +523,7 @@ async function notifyComment(
         .delete()
         .in("recipient_id", [...recipients])
         .in("task_id", taskIds)
-        .eq("type", "comment")
-        .eq("read", false);
+        .eq("type", "comment");
     }
 
     await db.from("notifications").insert(rows);
@@ -568,13 +569,18 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
   return getNotifications();
 }
 
-/** Mark one notification read — what opening it from the bell does. */
-export async function markNotificationRead(id: string): Promise<ActionResult> {
+/** Take one notification off the list — what opening or dismissing it does.
+ *
+ *  Deleted rather than flagged: a notification is a prompt to go look at
+ *  something, and once you have, it has no job left. Keeping it around only
+ *  asks the reader to sort what they've handled from what they haven't. The
+ *  thing it pointed at — the discussion — is the durable record. */
+export async function dismissNotification(id: string): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
   const { error } = await db
     .from("notifications")
-    .update({ read: true })
+    .delete()
     .eq("id", id)
     .eq("recipient_id", await currentUid());
   if (error) return { ok: false, error: error.message };
@@ -600,15 +606,14 @@ export async function pokeTeammate(
   return { ok: true };
 }
 
-/** Mark all of my notifications read. */
-export async function markNotificationsRead(): Promise<ActionResult> {
+/** Empty my notification list in one go. */
+export async function clearNotifications(): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
   const { error } = await db
     .from("notifications")
-    .update({ read: true })
-    .eq("recipient_id", await currentUid())
-    .eq("read", false);
+    .delete()
+    .eq("recipient_id", await currentUid());
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

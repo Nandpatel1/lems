@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, MessageSquare, UserPlus } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import type { AppNotification } from "@/lib/data";
 import {
-  markNotificationsRead,
-  markNotificationRead,
+  clearNotifications,
+  dismissNotification,
   fetchNotifications,
 } from "@/app/actions";
 
@@ -30,7 +30,11 @@ function timeAgo(iso: string): string {
 
 /** What the row says, split into a headline and the quoted payload beneath it.
  *  Built here rather than stored as a sentence, so a renamed task reads right
- *  in a notification sent before the rename. */
+ *  in a notification sent before the rename.
+ *
+ *  The headline names the event ("commented on", "assigned you"), which is why
+ *  there's no type glyph on the row: it would restate what the sentence
+ *  already says, and the avatar is doing the only other job — who. */
 function describe(n: AppNotification): { headline: React.ReactNode; detail?: string } {
   const who = n.actorName ?? "Someone";
   if (n.type === "comment") {
@@ -59,11 +63,6 @@ function describe(n: AppNotification): { headline: React.ReactNode; detail?: str
   return { headline: <span className="text-ink">{n.body}</span> };
 }
 
-function TypeIcon({ type }: { type: string }) {
-  const Icon = type === "comment" ? MessageSquare : UserPlus;
-  return <Icon className="h-3 w-3" strokeWidth={2} aria-hidden="true" />;
-}
-
 export default function NotificationsBell({
   items,
   placement = "sidebar",
@@ -75,7 +74,6 @@ export default function NotificationsBell({
   const [list, setList] = useState(items);
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
-  const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   // The server render is the source of truth on navigation; polling refreshes
@@ -116,27 +114,29 @@ export default function NotificationsBell({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const unread = list.filter((n) => !n.read).length;
+  const count = list.length;
 
-  /** Opening the panel deliberately does NOT clear everything: the dots are
-   *  how you tell what you've already dealt with. Reading one clears one. */
+  /** Every row here is outstanding, so acting on one takes it off the list —
+   *  optimistically, then for real. */
+  function drop(id: string) {
+    setList((prev) => prev.filter((x) => x.id !== id));
+    startTransition(async () => {
+      await dismissNotification(id);
+    });
+  }
+
   function openNotification(n: AppNotification) {
     setOpen(false);
-    if (!n.read) {
-      setList((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
-      startTransition(async () => {
-        await markNotificationRead(n.id);
-      });
-    }
+    drop(n.id);
     if (n.taskId && n.taskOwnerId) {
       router.push(`/team/${n.taskOwnerId}?task=${n.taskId}`);
     }
   }
 
   function clearAll() {
-    setList((prev) => prev.map((x) => ({ ...x, read: true })));
+    setList([]);
     startTransition(async () => {
-      await markNotificationsRead();
+      await clearNotifications();
     });
   }
 
@@ -145,15 +145,15 @@ export default function NotificationsBell({
       <button
         ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+        aria-label={count > 0 ? `Notifications, ${count} new` : "Notifications"}
         aria-expanded={open}
         aria-haspopup="true"
         className="relative grid h-6 w-6 place-items-center rounded-full text-ink-3 outline-none transition-colors duration-quick hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-soft"
       >
         <Bell className="h-4 w-4" />
-        {unread > 0 && (
+        {count > 0 && (
           <span className="absolute -right-0.5 -top-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-1 text-[9px] font-medium tabular-nums text-white">
-            {unread > 9 ? "9+" : unread}
+            {count > 9 ? "9+" : count}
           </span>
         )}
       </button>
@@ -167,7 +167,6 @@ export default function NotificationsBell({
             className="fixed inset-0 z-40 cursor-default"
           />
           <div
-            ref={panelRef}
             role="dialog"
             aria-label="Notifications"
             // Width is capped against the viewport: in the mobile header this
@@ -178,17 +177,17 @@ export default function NotificationsBell({
           >
             <div className="flex items-center justify-between gap-2 border-b border-hair px-3 py-2">
               <p className="text-[12px] font-medium text-ink">Notifications</p>
-              {unread > 0 && (
+              {count > 0 && (
                 <button
                   onClick={clearAll}
                   className="rounded-chip px-1.5 py-0.5 text-[11px] text-ink-3 outline-none transition-colors duration-quick hover:bg-surface-soft hover:text-ink-2 focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  Mark all read
+                  Clear all
                 </button>
               )}
             </div>
 
-            {list.length === 0 ? (
+            {count === 0 ? (
               <div className="px-4 py-8 text-center">
                 <span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-surface-soft">
                   <Bell className="h-4 w-4 text-ink-3" />
@@ -197,7 +196,7 @@ export default function NotificationsBell({
                   You&apos;re all caught up
                 </p>
                 <p className="mt-0.5 text-[11px] text-ink-3">
-                  Comments on your tasks land here.
+                  Replies on work you share land here.
                 </p>
               </div>
             ) : (
@@ -208,48 +207,59 @@ export default function NotificationsBell({
                   // folder hand-off never carried one and isn't a dead end.
                   const orphaned = Boolean(n.taskId) && !n.taskOwnerId;
                   return (
-                    <button
+                    // The dismiss control can't nest inside the row's button,
+                    // so the row is a positioned wrapper holding both.
+                    <div
                       key={n.id}
-                      onClick={() => openNotification(n)}
-                      // Still clickable when the task is gone: the click has
-                      // nowhere to go, but it can still clear the dot.
-                      className={`flex w-full gap-2.5 border-b border-hair px-3 py-2.5 text-left outline-none transition-colors duration-quick last:border-b-0 focus-visible:bg-surface-soft ${
-                        n.read ? "hover:bg-surface-soft" : "bg-accent-tint/40 hover:bg-accent-tint"
-                      }`}
+                      className="group relative border-b border-hair last:border-b-0"
                     >
-                      <span className="relative shrink-0">
-                        <span className="grid h-7 w-7 place-items-center rounded-full bg-accent-tint text-[11px] font-medium text-accent-ink">
+                      <button
+                        onClick={() => openNotification(n)}
+                        // Still clickable when the task is gone: the click has
+                        // nowhere to go, but it can still clear the row.
+                        className="flex w-full gap-2.5 px-3 py-2.5 pr-9 text-left outline-none transition-colors duration-quick hover:bg-surface-soft focus-visible:bg-surface-soft"
+                      >
+                        {/* self-start, or the avatar stretches with the row and
+                            drifts away from the line it belongs to. */}
+                        <span className="mt-0.5 grid h-7 w-7 shrink-0 self-start place-items-center rounded-full bg-accent-tint text-[11px] font-medium text-accent-ink">
                           {n.actorInitial ?? "•"}
                         </span>
-                        {/* The kind of event, badged on the person who caused
-                            it — one glyph instead of a second line of text. */}
-                        <span className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface text-ink-3 ring-1 ring-hair">
-                          <TypeIcon type={n.type} />
-                        </span>
-                      </span>
 
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[12px] leading-snug text-ink-2">
-                          {headline}
-                        </span>
-                        {detail && (
-                          <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                            &ldquo;{detail}&rdquo;
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[12px] leading-snug text-ink-2">
+                            {headline}
                           </span>
-                        )}
-                        <span className="mt-0.5 block text-[10px] text-ink-3">
-                          {timeAgo(n.createdAt)}
-                          {orphaned && " · task removed"}
+                          {detail && (
+                            <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                              &ldquo;{detail}&rdquo;
+                            </span>
+                          )}
+                          <span className="mt-1 block text-[10px] text-ink-3">
+                            {timeAgo(n.createdAt)}
+                            {orphaned && " · task removed"}
+                          </span>
                         </span>
-                      </span>
+                      </button>
 
-                      {!n.read && (
-                        <span
-                          aria-label="Unread"
-                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                        />
-                      )}
-                    </button>
+                      {/* Clearing something without opening it is a real want —
+                          otherwise the only way out is all-or-nothing. Always
+                          visible rather than revealed on hover: this panel is
+                          also on the mobile header, where there is no hover to
+                          reveal it with. Quiet at rest, so it doesn't compete
+                          with the row it sits on. */}
+                      <button
+                        onClick={(e) => {
+                          // The row's own click handler navigates; this one
+                          // must not reach it.
+                          e.stopPropagation();
+                          drop(n.id);
+                        }}
+                        aria-label="Dismiss notification"
+                        className="absolute right-1.5 top-1.5 z-10 grid h-6 w-6 place-items-center rounded-control text-ink-3 outline-none transition-colors duration-quick hover:bg-surface-soft hover:text-ink-2 focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
