@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Check,
+  ChevronRight,
   Circle,
   Folder,
   Moon,
@@ -69,7 +70,16 @@ export default function MemberWorkspace({
   const router = useRouter();
   const isSelf = member.id === currentUid;
 
-  const [selectedId, setSelectedId] = useState<string | null>(tasks[0]?.id ?? null);
+  // Open on something active: shipped work sits behind a collapsed disclosure,
+  // and a pane showing a task you can't see in the rail reads as a mismatch.
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => (tasks.find((t) => t.state !== "complete") ?? tasks[0])?.id ?? null
+  );
+
+  /** Shipped work is history — collapsed unless it's all there is to show. */
+  const [showCompleted, setShowCompleted] = useState(
+    () => !tasks.some((t) => t.state !== "complete")
+  );
 
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [comment, setComment] = useState("");
@@ -196,16 +206,18 @@ export default function MemberWorkspace({
         {/* Left: task list */}
         <div className="flex flex-col gap-4">
           <Section
-            label={`Active · ${active.length}`}
+            label="Active"
+            count={active.length}
             empty="Nothing active."
             tasks={activeRows}
             selectedId={selectedId}
             removingId={removingId}
             onSelect={setSelectedId}
           />
-          <Section
-            label={`Completed · ${completed.length}`}
-            empty="Nothing shipped yet."
+          <CompletedSection
+            count={completed.length}
+            open={showCompleted}
+            onToggle={() => setShowCompleted((v) => !v)}
             tasks={completedRows}
             selectedId={selectedId}
             removingId={removingId}
@@ -477,6 +489,7 @@ export default function MemberWorkspace({
  *  action, so it waits in the detail pane where the task is actually open. */
 function Section({
   label,
+  count,
   empty,
   tasks,
   selectedId,
@@ -484,6 +497,7 @@ function Section({
   onSelect,
 }: {
   label: string;
+  count: number;
   empty: string;
   tasks: MemberTaskRow[];
   selectedId: string | null;
@@ -492,72 +506,177 @@ function Section({
 }) {
   return (
     <section>
-      <p className="mb-2 text-[11px] text-ink-3">{label}</p>
+      <p className="mb-2 text-[11px] text-ink-3">
+        {label} · {count}
+      </p>
       {tasks.length === 0 ? (
         <p className="rounded-card border border-dashed border-hair px-3 py-3 text-[12px] text-ink-3">
           {empty}
         </p>
       ) : (
         <div className="overflow-hidden rounded-card border border-hair bg-surface">
-          {tasks.map((t) => {
-            const selected = t.id === selectedId;
-            const due = t.state !== "complete" ? dueLabel(t.deadline) : null;
-            const removing = t.id === removingId;
-            return (
-              // Collapsing wrapper: 1fr -> 0fr needs no measurement and no
-              // dependency, and the rows below slide up with it.
-              <div
-                key={t.id}
-                className={`grid border-b border-hair transition-all duration-base ease-in-out last:border-b-0 ${
-                  removing ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
-                }`}
-              >
-                <div className="overflow-hidden">
-                  <button
-                    data-task-row={t.id}
-                    onClick={() => onSelect(t.id)}
-                    aria-current={selected}
-                    className={`flex w-full items-center gap-2 py-2.5 pr-3 text-left outline-none transition-colors duration-quick ${
-                      selected
-                        ? "bg-accent-tint"
-                        : "hover:bg-surface-soft focus-visible:bg-surface-soft"
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`h-9 w-[3px] shrink-0 rounded-r ${
-                        selected ? "bg-accent" : "bg-transparent"
-                      }`}
-                    />
-                    <TaskIcon t={t} selected={selected} />
-                    <span
-                      className={`min-w-0 flex-1 truncate text-[12px] ${
-                        selected
-                          ? "font-medium text-accent-ink"
-                          : t.state === "complete"
-                          ? "text-ink-2"
-                          : "text-ink"
-                      }`}
-                    >
-                      {t.title}
-                    </span>
-                    {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
-                    {due && (
-                      <span
-                        className={`shrink-0 text-[10px] ${
-                          due.overdue ? "text-warm-ink" : "text-ink-3"
-                        }`}
-                      >
-                        {due.text}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          <TaskRows
+            tasks={tasks}
+            selectedId={selectedId}
+            removingId={removingId}
+            onSelect={onSelect}
+          />
         </div>
       )}
     </section>
+  );
+}
+
+/** Shipped work, folded away by default. It's the record of what's done, not
+ *  the thing you came here to act on — so it costs one line until asked for.
+ *  The header carries the count so collapsing never hides the number. */
+function CompletedSection({
+  count,
+  open,
+  onToggle,
+  tasks,
+  selectedId,
+  removingId,
+  onSelect,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  tasks: MemberTaskRow[];
+  selectedId: string | null;
+  removingId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (count === 0) {
+    return (
+      <section>
+        <p className="mb-2 text-[11px] text-ink-3">Completed · 0</p>
+        <p className="rounded-card border border-dashed border-hair px-3 py-3 text-[12px] text-ink-3">
+          Nothing shipped yet.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-card border border-hair bg-surface">
+      <h2>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls="completed-tasks"
+          className="flex w-full items-center gap-2 py-2.5 pl-3 pr-3 text-left outline-none transition-colors duration-quick hover:bg-surface-soft focus-visible:bg-surface-soft"
+        >
+          {/* Sits in the same column as the row icons below, so opening the
+              section doesn't shift the eye's scan line. */}
+          <ChevronRight
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform duration-base ${
+              open ? "rotate-90" : ""
+            }`}
+          />
+          <span className="min-w-0 flex-1 truncate text-[12px] text-ink-2">Completed</span>
+          <span className="shrink-0 rounded-chip bg-surface-soft px-1.5 py-0.5 text-[10px] tabular-nums text-ink-3">
+            {count}
+          </span>
+        </button>
+      </h2>
+
+      {/* 1fr -> 0fr: collapses without measuring, and reduced-motion just
+          snaps it. `inert` keeps the folded rows out of the tab order. */}
+      <div
+        id="completed-tasks"
+        className={`grid transition-[grid-template-rows,opacity] duration-base ease-in-out ${
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+        inert={!open}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-hair">
+            <TaskRows
+              tasks={tasks}
+              selectedId={selectedId}
+              removingId={removingId}
+              onSelect={onSelect}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TaskRows({
+  tasks,
+  selectedId,
+  removingId,
+  onSelect,
+}: {
+  tasks: MemberTaskRow[];
+  selectedId: string | null;
+  removingId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <>
+      {tasks.map((t) => {
+        const selected = t.id === selectedId;
+        const due = t.state !== "complete" ? dueLabel(t.deadline) : null;
+        const removing = t.id === removingId;
+        return (
+          // Collapsing wrapper: 1fr -> 0fr needs no measurement and no
+          // dependency, and the rows below slide up with it.
+          <div
+            key={t.id}
+            className={`grid border-b border-hair transition-all duration-base ease-in-out last:border-b-0 ${
+              removing ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <button
+                data-task-row={t.id}
+                onClick={() => onSelect(t.id)}
+                aria-current={selected}
+                className={`flex w-full items-center gap-2 py-2.5 pr-3 text-left outline-none transition-colors duration-quick ${
+                  selected
+                    ? "bg-accent-tint"
+                    : "hover:bg-surface-soft focus-visible:bg-surface-soft"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-9 w-[3px] shrink-0 rounded-r ${
+                    selected ? "bg-accent" : "bg-transparent"
+                  }`}
+                />
+                <TaskIcon t={t} selected={selected} />
+                <span
+                  className={`min-w-0 flex-1 truncate text-[12px] ${
+                    selected
+                      ? "font-medium text-accent-ink"
+                      : t.state === "complete"
+                      ? "text-ink-2"
+                      : "text-ink"
+                  }`}
+                >
+                  {t.title}
+                </span>
+                {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
+                {due && (
+                  <span
+                    className={`shrink-0 text-[10px] ${
+                      due.overdue ? "text-warm-ink" : "text-ink-3"
+                    }`}
+                  >
+                    {due.text}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
