@@ -29,13 +29,32 @@ export async function getProfiles(): Promise<Founder[]> {
   }
 }
 
+export type NotificationType = "comment" | "assigned" | "poke";
+
+/** Actor and task are joined at read time rather than baked into `body`, so a
+ *  renamed resource or person reads correctly in notifications sent before the
+ *  rename. `body` therefore holds only the raw payload — the comment text for
+ *  'comment', a whole sentence for the older 'assigned'/'poke' rows. */
 export interface AppNotification {
   id: string;
-  type: string;
+  type: NotificationType | string;
   body: string;
   read: boolean;
   createdAt: string;
   taskId?: string;
+  taskTitle?: string;
+  /** Whose workspace the task lives in — a thread participant is often not the
+   *  owner, so this, not the recipient, is what the deep link points at. */
+  taskOwnerId?: string;
+  actorName?: string;
+  actorInitial?: string;
+}
+
+/** Supabase returns an embedded one-to-many as an object, but a to-many shape
+ *  as an array. Normalise so callers don't have to care. */
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (!rel) return null;
+  return Array.isArray(rel) ? rel[0] ?? null : rel;
 }
 
 export async function getNotifications(): Promise<AppNotification[]> {
@@ -45,19 +64,33 @@ export async function getNotifications(): Promise<AppNotification[]> {
     if (!db || !uid) throw new Error("no");
     const { data, error } = await db
       .from("notifications")
-      .select("*")
+      // notifications points at profiles twice (recipient, actor), so the
+      // actor join has to name its constraint or Postgrest can't disambiguate.
+      .select(
+        "id, type, body, read, created_at, task_id, " +
+          "actor:profiles!notifications_actor_id_fkey(name, initial), " +
+          "task:tasks(title, owner_id)"
+      )
       .eq("recipient_id", uid)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw error;
-    return (data ?? []).map((n: any) => ({
-      id: n.id,
-      type: n.type,
-      body: n.body,
-      read: n.read,
-      createdAt: n.created_at,
-      taskId: n.task_id ?? undefined,
-    }));
+    return (data ?? []).map((n: any) => {
+      const actor = one<any>(n.actor);
+      const task = one<any>(n.task);
+      return {
+        id: n.id,
+        type: n.type,
+        body: n.body,
+        read: n.read,
+        createdAt: n.created_at,
+        taskId: n.task_id ?? undefined,
+        taskTitle: task?.title ?? undefined,
+        taskOwnerId: task?.owner_id ?? undefined,
+        actorName: actor?.name ?? undefined,
+        actorInitial: actor?.initial ?? undefined,
+      };
+    });
   } catch {
     return [];
   }

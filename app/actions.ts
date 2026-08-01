@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { CURRENT_USER } from "@/lib/constants";
 import { getCurrentUserId } from "@/lib/session";
+import { getNotifications, type AppNotification } from "@/lib/data";
 import type { ItemType, TaskState } from "@/lib/types";
 
 export interface ActionResult {
@@ -344,12 +345,22 @@ export async function saveResourceDescription(
   return { ok: true };
 }
 
+export interface TaskComment {
+  id: string;
+  author: string;
+  /** Null once the author's profile is gone — the comment outlives them. */
+  authorId: string | null;
+  authorInitial: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface TaskDetail {
   note: string | null;
   type: ItemType;
   state: string;
   canComplete: boolean;
-  comments: { id: string; author: string; body: string; createdAt: string }[];
+  comments: TaskComment[];
 }
 
 /** Load a task's note, status, and comment thread. */
@@ -361,7 +372,7 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
     db.from("tasks").select("note, type, state, is_folder").eq("id", taskId).single(),
     db
       .from("comments")
-      .select("id, body, created_at, author:profiles(name)")
+      .select("id, body, created_at, author_id, author:profiles(name, initial)")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true }),
   ]);
@@ -371,12 +382,18 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
     type: (task?.type as ItemType) ?? "learn",
     state,
     canComplete: state !== "complete" && !task?.is_folder,
-    comments: (comments ?? []).map((c: any) => ({
-      id: c.id,
-      body: c.body,
-      createdAt: c.created_at,
-      author: c.author?.name ?? "Someone",
-    })),
+    comments: (comments ?? []).map((c: any) => {
+      const author = Array.isArray(c.author) ? c.author[0] : c.author;
+      const name = author?.name ?? "Someone";
+      return {
+        id: c.id,
+        body: c.body,
+        createdAt: c.created_at,
+        authorId: c.author_id ?? null,
+        author: name,
+        authorInitial: author?.initial ?? name.charAt(0).toUpperCase(),
+      };
+    }),
   };
 }
 
@@ -388,6 +405,8 @@ export interface MemberTaskRow {
   deadline: string | null;
   note: string | null;
   isFolder: boolean;
+  /** Surfaced on the rail so a thread is findable without opening every task. */
+  commentCount: number;
 }
 
 /** All of a teammate's tasks (active + completed), newest first — for team review. */
@@ -399,7 +418,23 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
     .select("id, title, type, state, deadline, note, is_folder")
     .eq("owner_id", memberId)
     .order("created_at", { ascending: false });
-  return (data ?? []).map((t: any) => ({
+  const tasks = data ?? [];
+
+  // One extra round trip for the whole rail, counted here rather than as a
+  // per-row aggregate — this list is one person's queue, not a feed.
+  const counts = new Map<string, number>();
+  if (tasks.length > 0) {
+    const { data: rows } = await db
+      .from("comments")
+      .select("task_id")
+      .in(
+        "task_id",
+        tasks.map((t: any) => t.id)
+      );
+    for (const r of rows ?? []) counts.set(r.task_id, (counts.get(r.task_id) ?? 0) + 1);
+  }
+
+  return tasks.map((t: any) => ({
     id: t.id,
     title: t.title,
     type: t.type,
@@ -407,6 +442,7 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
     deadline: t.deadline ?? null,
     note: t.note ?? null,
     isFolder: t.is_folder ?? false,
+    commentCount: counts.get(t.id) ?? 0,
   }));
 }
 
@@ -419,16 +455,95 @@ export async function saveNote(taskId: string, note: string): Promise<ActionResu
   return { ok: true };
 }
 
-/** Add a comment to a task's thread. */
+/** Everyone a new comment concerns: the person the task belongs to, plus
+ *  anyone already in the thread — minus whoever just wrote it.
+ *
+ *  A task is one person × one resource, so a thread is about *that* person's
+ *  copy of the work. Two people holding the same resource have two separate
+ *  threads, and a comment on one is deliberately not news to the other. What
+ *  makes a thread multi-party is people joining it, which is exactly what
+ *  reading the comment authors captures.
+ *
+ *  Best-effort throughout: a comment that saved must not report failure
+ *  because notifying somebody about it didn't. */
+async function notifyComment(
+  db: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  taskId: string,
+  body: string,
+  authorId: string
+) {
+  try {
+    const [{ data: task }, { data: thread }] = await Promise.all([
+      db.from("tasks").select("owner_id").eq("id", taskId).single(),
+      db.from("comments").select("author_id").eq("task_id", taskId),
+    ]);
+
+    const recipients = new Set<string>();
+    if (task?.owner_id) recipients.add(task.owner_id);
+    for (const c of thread ?? []) if (c.author_id) recipients.add(c.author_id);
+    recipients.delete(authorId);
+    if (recipients.size === 0) return;
+
+    const ids = [...recipients];
+
+    // One live row per thread per person. Ten comments overnight should read
+    // as one thread to catch up on, not ten things to dismiss — so the unread
+    // ones are replaced by the newest rather than stacked on top of.
+    await db
+      .from("notifications")
+      .delete()
+      .in("recipient_id", ids)
+      .eq("task_id", taskId)
+      .eq("type", "comment")
+      .eq("read", false);
+
+    await db.from("notifications").insert(
+      ids.map((id) => ({
+        recipient_id: id,
+        actor_id: authorId,
+        type: "comment",
+        task_id: taskId,
+        body,
+      }))
+    );
+  } catch {
+    // Swallowed on purpose — see the doc comment above.
+  }
+}
+
+/** Add a comment to a task's thread, and tell the people it concerns. */
 export async function addComment(taskId: string, body: string): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
-  if (!body.trim()) return { ok: false, error: "Empty comment" };
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, error: "Empty comment" };
+  const me = await currentUid();
   const { error } = await db.from("comments").insert({
     task_id: taskId,
-    author_id: await currentUid(),
-    body: body.trim(),
+    author_id: me,
+    body: trimmed,
   });
+  if (error) return { ok: false, error: error.message };
+
+  await notifyComment(db, taskId, trimmed, me);
+  return { ok: true };
+}
+
+/** The current user's notifications, for the bell to poll. Reads through the
+ *  same data layer the server render uses, so both agree. */
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  return getNotifications();
+}
+
+/** Mark one notification read — what opening it from the bell does. */
+export async function markNotificationRead(id: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", id)
+    .eq("recipient_id", await currentUid());
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

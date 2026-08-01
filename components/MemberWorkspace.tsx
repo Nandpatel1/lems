@@ -11,6 +11,7 @@ import {
   Folder,
   Moon,
   Send,
+  MessageSquare,
   FileText,
   UserMinus,
   Library,
@@ -20,6 +21,7 @@ import {
   addComment,
   unassignTask,
   type MemberTaskRow,
+  type TaskComment,
 } from "@/app/actions";
 import ConfirmDialog from "./ConfirmDialog";
 import TypeChip from "./TypeChip";
@@ -28,8 +30,18 @@ import TypeChip from "./TypeChip";
 const REMOVE_MS = 220;
 /** How long the "just unassigned" reassurance stays in the detail pane. */
 const NOTICE_MS = 4200;
+/** How long an arrived-from-a-notification row stays ringed. Long enough to
+ *  catch the eye mid-scroll, short enough not to become part of the design. */
+const ARRIVE_MS = 1800;
 
-type Comment = { id: string; author: string; body: string; createdAt: string };
+/** Recent comments read better as elapsed time; older ones as a date. */
+function commentTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 function dueLabel(deadline: string | null): { text: string; overdue: boolean } | null {
   if (!deadline) return null;
@@ -60,28 +72,41 @@ export default function MemberWorkspace({
   member,
   currentUid,
   tasks,
+  focusTaskId = null,
 }: {
   member: { id: string; name: string; initial: string };
   currentUid: string | null;
   tasks: MemberTaskRow[];
+  focusTaskId?: string | null;
 }) {
   const router = useRouter();
   const isSelf = member.id === currentUid;
 
-  // Open on something active: shipped work sits behind a collapsed disclosure,
-  // and a pane showing a task you can't see in the rail reads as a mismatch.
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () => (tasks.find((t) => t.state !== "complete") ?? tasks[0])?.id ?? null
-  );
+  /** Arriving from a notification means the task is already chosen. Otherwise
+   *  open on something active: shipped work sits behind a collapsed
+   *  disclosure, and a pane showing a task you can't see in the rail reads as
+   *  a mismatch. */
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const focused = focusTaskId ? tasks.find((t) => t.id === focusTaskId) : undefined;
+    if (focused) return focused.id;
+    return (tasks.find((t) => t.state !== "complete") ?? tasks[0])?.id ?? null;
+  });
 
-  /** Shipped work is history — collapsed unless it's all there is to show. */
-  const [showCompleted, setShowCompleted] = useState(
-    () => !tasks.some((t) => t.state !== "complete")
-  );
+  /** Shipped work is history — collapsed unless it's all there is to show, or
+   *  the task we were sent to is in there. */
+  const [showCompleted, setShowCompleted] = useState(() => {
+    const focused = focusTaskId ? tasks.find((t) => t.id === focusTaskId) : undefined;
+    if (focused?.state === "complete") return true;
+    return !tasks.some((t) => t.state !== "complete");
+  });
 
-  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [comments, setComments] = useState<TaskComment[] | null>(null);
   const [comment, setComment] = useState("");
   const [pending, startTransition] = useTransition();
+
+  /** The row a notification just pointed at, ringed briefly so the jump lands
+   *  somewhere obvious instead of silently swapping the pane. */
+  const [arrivedId, setArrivedId] = useState<string | null>(focusTaskId);
 
 
   const [confirmUnassign, setConfirmUnassign] = useState<MemberTaskRow | null>(null);
@@ -94,7 +119,12 @@ export default function MemberWorkspace({
   const [liveMsg, setLiveMsg] = useState("");
 
   const paneRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read inside the focus effect without making it re-run whenever the rail
+  // refreshes — the effect is about the notification, not the task list.
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
 
   useEffect(
     () => () => {
@@ -102,6 +132,31 @@ export default function MemberWorkspace({
     },
     []
   );
+
+  /** Opening a second notification while already on this page changes only the
+   *  query string, so the jump has to be driven by the param, not mount. */
+  useEffect(() => {
+    if (!focusTaskId) return;
+    const task = tasksRef.current.find((t) => t.id === focusTaskId);
+    if (!task) return;
+
+    setSelectedId(focusTaskId);
+    if (task.state === "complete") setShowCompleted(true);
+    setArrivedId(focusTaskId);
+
+    // One frame, so the row exists (and the Completed section has expanded)
+    // before we try to bring it into view.
+    const frame = requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-task-row="${focusTaskId}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    const timer = setTimeout(() => setArrivedId(null), ARRIVE_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [focusTaskId]);
 
   // Rows still in the DOM (includes the one collapsing) vs. what the counts see.
   const rows = tasks.filter((t) => !removedIds.has(t.id));
@@ -152,6 +207,14 @@ export default function MemberWorkspace({
     };
   }, [selectedId]);
 
+  /** The thread reads oldest-first, so the newest message is the one you want
+   *  to land on — same as any chat. */
+  useEffect(() => {
+    if (!comments || comments.length === 0) return;
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [comments]);
+
   function submitComment() {
     if (!selectedId || !comment.trim()) return;
     const body = comment.trim();
@@ -160,6 +223,9 @@ export default function MemberWorkspace({
       await addComment(selectedId, body);
       const d = await getTaskDetail(selectedId);
       setComments(d.comments);
+      // The rail's comment count came from the server render — bring it back
+      // in step now that this thread has one more.
+      router.refresh();
     });
   }
 
@@ -197,6 +263,7 @@ export default function MemberWorkspace({
             tasks={activeRows}
             selectedId={selectedId}
             removingId={removingId}
+            arrivedId={arrivedId}
             onSelect={setSelectedId}
           />
           <CompletedSection
@@ -206,6 +273,7 @@ export default function MemberWorkspace({
             tasks={completedRows}
             selectedId={selectedId}
             removingId={removingId}
+            arrivedId={arrivedId}
             onSelect={setSelectedId}
           />
         </div>
@@ -259,7 +327,12 @@ export default function MemberWorkspace({
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
+            // Keyed on the task so switching tasks settles the pane in, rather
+            // than swapping text under a stationary frame.
+            <div
+              key={selected.id}
+              className="flex flex-col gap-4 animate-[pane-in_220ms_cubic-bezier(.2,.8,.2,1)]"
+            >
               <div>
                 <div className="mb-2 flex items-center gap-2">
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -324,48 +397,100 @@ export default function MemberWorkspace({
                 )}
               </div>
 
-              {/* Comments */}
+              {/* Comments — the thread a notification brings you back to, so
+                  it has to read as a conversation, not a list of rows. */}
               <div>
-                <p className="mb-1.5 text-[11px] text-ink-3">Comments</p>
-                <div className="flex flex-col gap-2">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-3">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Comments
+                  {comments && comments.length > 0 && (
+                    <span className="tabular-nums">· {comments.length}</span>
+                  )}
+                </p>
+
+                {/* Capped and scrolled: a long thread must not push the
+                    composer off the bottom of the pane. */}
+                <div
+                  ref={threadRef}
+                  className="flex max-h-[19rem] flex-col gap-2.5 overflow-y-auto"
+                >
                   {comments === null ? (
                     <p className="text-[12px] text-ink-3">Loading…</p>
                   ) : comments.length === 0 ? (
-                    <p className="text-[12px] text-ink-3">No comments yet — start the thread.</p>
+                    <p className="rounded-control border border-dashed border-hair px-3 py-2.5 text-[12px] text-ink-3">
+                      No comments yet —{" "}
+                      {isSelf
+                        ? "nobody's weighed in on this one."
+                        : `start the thread with ${member.name}.`}
+                    </p>
                   ) : (
-                    comments.map((c) => (
-                      <div key={c.id} className="rounded-control bg-surface-soft px-3 py-2">
-                        <p className="text-[12px] text-ink">{c.body}</p>
-                        <p className="mt-0.5 text-[10px] text-ink-3">
-                          {c.author} ·{" "}
-                          {new Date(c.createdAt).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                          })}
-                        </p>
-                      </div>
-                    ))
+                    comments.map((c) => {
+                      const mine = Boolean(currentUid && c.authorId === currentUid);
+                      return (
+                        <div key={c.id} className="flex gap-2">
+                          <span
+                            aria-hidden="true"
+                            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-medium ${
+                              mine
+                                ? "bg-accent-tint text-accent-ink"
+                                : "bg-surface-soft text-ink-2"
+                            }`}
+                          >
+                            {c.authorInitial}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-baseline gap-1.5 text-[11px]">
+                              <span className="font-medium text-ink-2">
+                                {mine ? "You" : c.author}
+                              </span>
+                              <span className="text-ink-3">
+                                {commentTime(c.createdAt)}
+                              </span>
+                            </p>
+                            {/* Your own remarks sit in accent, everyone else's
+                                in neutral — so scanning a thread tells you who
+                                is talking before you read a word. */}
+                            <p
+                              className={`mt-1 whitespace-pre-wrap break-words rounded-control px-3 py-2 text-[12px] leading-relaxed text-ink ${
+                                mine ? "bg-accent-tint/50" : "bg-surface-soft"
+                              }`}
+                            >
+                              {c.body}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
-                <div className="mt-2 flex items-center gap-2">
+
+                <div className="mt-2.5 flex items-center gap-2">
                   <input
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") submitComment();
                     }}
-                    placeholder="Add a comment…"
-                    className="flex-1 rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                    placeholder={
+                      isSelf ? "Add a comment…" : `Reply to ${member.name}…`
+                    }
+                    className="flex-1 rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors duration-quick focus:border-accent"
                   />
                   <button
                     onClick={submitComment}
                     disabled={pending || !comment.trim()}
                     aria-label="Send comment"
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-50"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent text-white outline-none transition-transform duration-quick focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.98] disabled:opacity-50"
                   >
                     <Send className="h-4 w-4" />
                   </button>
                 </div>
+                {!isSelf && (
+                  <p className="mt-1.5 text-[11px] text-ink-3">
+                    {member.name} gets a notification, along with anyone else in this
+                    thread.
+                  </p>
+                )}
               </div>
 
             </div>
@@ -449,6 +574,7 @@ function Section({
   tasks,
   selectedId,
   removingId,
+  arrivedId,
   onSelect,
 }: {
   label: string;
@@ -457,6 +583,7 @@ function Section({
   tasks: MemberTaskRow[];
   selectedId: string | null;
   removingId: string | null;
+  arrivedId: string | null;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -474,6 +601,7 @@ function Section({
             tasks={tasks}
             selectedId={selectedId}
             removingId={removingId}
+            arrivedId={arrivedId}
             onSelect={onSelect}
           />
         </div>
@@ -492,6 +620,7 @@ function CompletedSection({
   tasks,
   selectedId,
   removingId,
+  arrivedId,
   onSelect,
 }: {
   count: number;
@@ -500,6 +629,7 @@ function CompletedSection({
   tasks: MemberTaskRow[];
   selectedId: string | null;
   removingId: string | null;
+  arrivedId: string | null;
   onSelect: (id: string) => void;
 }) {
   if (count === 0) {
@@ -553,6 +683,7 @@ function CompletedSection({
               tasks={tasks}
               selectedId={selectedId}
               removingId={removingId}
+              arrivedId={arrivedId}
               onSelect={onSelect}
             />
           </div>
@@ -566,11 +697,13 @@ function TaskRows({
   tasks,
   selectedId,
   removingId,
+  arrivedId,
   onSelect,
 }: {
   tasks: MemberTaskRow[];
   selectedId: string | null;
   removingId: string | null;
+  arrivedId: string | null;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -579,6 +712,7 @@ function TaskRows({
         const selected = t.id === selectedId;
         const due = t.state !== "complete" ? dueLabel(t.deadline) : null;
         const removing = t.id === removingId;
+        const arrived = t.id === arrivedId;
         return (
           // Collapsing wrapper: 1fr -> 0fr needs no measurement and no
           // dependency, and the rows below slide up with it.
@@ -593,11 +727,13 @@ function TaskRows({
                 data-task-row={t.id}
                 onClick={() => onSelect(t.id)}
                 aria-current={selected}
-                className={`flex w-full items-center gap-2 py-2.5 pr-3 text-left outline-none transition-colors duration-quick ${
+                // The ring fades out on its own after ARRIVE_MS — it marks the
+                // landing, then gets out of the way.
+                className={`flex w-full items-center gap-2 py-2.5 pr-3 text-left outline-none transition-all duration-base ${
                   selected
                     ? "bg-accent-tint"
                     : "hover:bg-surface-soft focus-visible:bg-surface-soft"
-                }`}
+                } ${arrived ? "ring-2 ring-inset ring-accent" : "ring-0 ring-transparent"}`}
               >
                 <span
                   aria-hidden="true"
@@ -618,6 +754,19 @@ function TaskRows({
                   {t.title}
                 </span>
                 {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
+                {/* A thread is the one thing on a row you can't infer from the
+                    title — so it earns its own mark. */}
+                {t.commentCount > 0 && (
+                  <span
+                    className="flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums text-ink-3"
+                    aria-label={`${t.commentCount} comment${
+                      t.commentCount === 1 ? "" : "s"
+                    }`}
+                  >
+                    <MessageSquare className="h-3 w-3" aria-hidden="true" />
+                    {t.commentCount}
+                  </span>
+                )}
                 {due && (
                   <span
                     className={`shrink-0 text-[10px] ${

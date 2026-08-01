@@ -10,7 +10,10 @@
 -- ---------- enums ----------
 do $$ begin create type item_type as enum ('learn','build','both'); exception when duplicate_object then null; end $$;
 do $$ begin create type task_state as enum ('parked','todo','in_progress','complete'); exception when duplicate_object then null; end $$;
-do $$ begin create type notification_type as enum ('poke','assigned'); exception when duplicate_object then null; end $$;
+do $$ begin create type notification_type as enum ('poke','assigned','comment'); exception when duplicate_object then null; end $$;
+-- A database created before comment notifications existed has the two-value
+-- enum. Widen it here so a re-run of this file matches a migrated database.
+alter type notification_type add value if not exists 'comment';
 
 -- ---------- reset ----------
 drop table if exists comments, notifications, tasks, resources, folders, milestones, profiles cascade;
@@ -108,6 +111,10 @@ create index resources_folder_id_idx     on resources (folder_id);
 create index comments_task_id_idx        on comments (task_id);
 create index notifications_task_id_idx   on notifications (task_id);
 create index notifications_recipient_idx on notifications (recipient_id, created_at desc);
+-- The comment fan-out collapses a thread's unread rows before inserting the
+-- newest one, and works out who's in a thread by reading its comment authors.
+create index notifications_thread_unread_idx on notifications (recipient_id, task_id) where read = false;
+create index comments_task_author_idx        on comments (task_id, author_id);
 
 -- ---------- identity stays in sync with the library, in both directions ----------
 create or replace function tasks_sync_from_resource() returns trigger
