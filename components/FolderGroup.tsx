@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText, Trash2 } from "lucide-react";
 import type { LibraryFolder, Resource } from "@/lib/types";
 import AssignControl from "./AssignControl";
+import TypeChip from "./TypeChip";
 import ResourceDetailModal from "./ResourceDetailModal";
 import ConfirmDialog from "./ConfirmDialog";
 import {
@@ -97,7 +98,11 @@ export default function FolderGroup({
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] text-ink">{r.title}</p>
+                  {/* On the meta line rather than beside the title: this line
+                      already wraps by design, so the chip can never push the
+                      title into a truncation it wouldn't otherwise need. */}
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
+                    <TypeChip type={r.type} />
                     {r.source && (
                       <span className="inline-flex items-center gap-1">
                         <ExternalLink className="h-3 w-3" /> {r.source}

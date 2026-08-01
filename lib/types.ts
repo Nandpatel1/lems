@@ -1,4 +1,6 @@
-export type ItemType = "learn" | "build";
+/** What kind of work an item is: knowledge to absorb, an action to ship, or
+ *  both at once. Owned by the resource and synced onto its tasks by trigger. */
+export type ItemType = "learn" | "build" | "both";
 export type TaskState = "parked" | "todo" | "in_progress" | "complete";
 
 export interface Task {

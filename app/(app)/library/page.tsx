@@ -21,7 +21,7 @@ export default async function LibraryPage() {
         </div>
         <div className="flex items-center gap-2">
           <NewFolderButton />
-          <AddResource folders={folderOpts} members={members} />
+          <AddResource folders={folderOpts} />
         </div>
       </div>
 

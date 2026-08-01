@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Circle, Folder, Moon, List } from "lucide-react";
 import type { Task } from "@/lib/types";
 import TaskDetailModal from "./TaskDetailModal";
+import TypeChip from "./TypeChip";
 
 type View = "list" | "folders";
 
@@ -158,6 +159,10 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
       >
         {task.title}
       </span>
+
+      {/* Folders are containers, not a kind of work — their children carry the
+          type, so a chip here would be a claim about a mixed bag. */}
+      {!task.isFolder && <TypeChip type={task.type} state={task.state} />}
 
       {task.isFolder ? (
         <span className="flex shrink-0 items-center gap-2">

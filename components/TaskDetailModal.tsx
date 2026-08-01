@@ -10,8 +10,26 @@ import {
   unassignTask,
   type TaskDetail,
 } from "@/app/actions";
+import type { ItemType } from "@/lib/types";
 import Modal from "./Modal";
 import ConfirmDialog from "./ConfirmDialog";
+import TypeChip from "./TypeChip";
+
+/** The closing question should match the kind of work: asking "what did you
+ *  learn" about a shipped landing page gets you a shrug and an empty box. */
+function notesLabel(type: ItemType | undefined): string {
+  if (type === "build") return "Your notes & what you shipped";
+  if (type === "both") return "Your notes — learnings & what you shipped";
+  return "Your notes & learnings";
+}
+
+function notesPrompt(type: ItemType | undefined): string {
+  if (type === "build")
+    return "What did you ship? A quick line helps the team review it.";
+  if (type === "both")
+    return "What did you learn, and what did you ship with it?";
+  return "What did you learn? A quick line helps the team review it.";
+}
 
 export default function TaskDetailModal({
   taskId,
@@ -76,8 +94,9 @@ export default function TaskDetailModal({
       maxWidth="max-w-lg"
       onClose={onClose}
       title={
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-2">
           {title}
+          {detail && <TypeChip type={detail.type} />}
           {done && (
             <span className="rounded-chip bg-ship-tint px-2 py-0.5 text-[11px] text-ship-ink">
               Done
@@ -87,14 +106,14 @@ export default function TaskDetailModal({
       }
     >
       <label className="text-[11px] text-ink-3">
-        {done ? "Notes — what got done" : "Your notes & learnings"}
+        {done ? "Notes — what got done" : notesLabel(detail?.type)}
       </label>
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         onBlur={persistNote}
         rows={4}
-        placeholder="What did you learn or get done? A quick line helps the team review it."
+        placeholder={notesPrompt(detail?.type)}
         className="mt-1 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
       />
       <div className="mt-1 h-4 text-[11px] text-ship-ink">{noteSaved ? "Saved" : ""}</div>

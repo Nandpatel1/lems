@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Check, Circle, Folder, Moon } from "lucide-react";
 import { getMemberTasks, type MemberTaskRow } from "@/app/actions";
+import TypeChip from "./TypeChip";
 
 function dueLabel(deadline: string | null): string | null {
   if (!deadline) return null;
@@ -135,9 +136,7 @@ export default function MemberTasksModal({
                           <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
                             {t.title}
                           </span>
-                          <span className="shrink-0 rounded-chip bg-accent-tint px-2 py-0.5 text-[10px] text-accent-ink">
-                            {t.type === "build" ? "Build" : "Learn"}
-                          </span>
+                          <TypeChip type={t.type} />
                         </div>
                         {t.note && (
                           <p className="mt-2 whitespace-pre-wrap rounded-control bg-surface-soft px-3 py-2 text-[12px] leading-relaxed text-ink-2">

@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { saveResourceDescription } from "@/app/actions";
 import type { Resource } from "@/lib/types";
 import Modal from "./Modal";
+import TypeChip from "./TypeChip";
 
 export default function ResourceDetailModal({
   resource,
@@ -27,16 +28,19 @@ export default function ResourceDetailModal({
 
   return (
     <Modal title={resource.title} onClose={onClose}>
-      {resource.source && (
-        <a
-          href={/^https?:\/\//.test(resource.source) ? resource.source : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mb-4 inline-flex items-center gap-1.5 text-[12px] text-ink-2"
-        >
-          <ExternalLink className="h-3.5 w-3.5" /> {resource.source}
-        </a>
-      )}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <TypeChip type={resource.type} />
+        {resource.source && (
+          <a
+            href={/^https?:\/\//.test(resource.source) ? resource.source : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] text-ink-2"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> {resource.source}
+          </a>
+        )}
+      </div>
 
       <label className="block text-[12px] font-medium text-ink">Details</label>
       <p className="mb-1.5 text-[11px] text-ink-3">

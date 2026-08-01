@@ -8,7 +8,7 @@
 -- If you change the schema, change it here too.
 
 -- ---------- enums ----------
-do $$ begin create type item_type as enum ('learn','build'); exception when duplicate_object then null; end $$;
+do $$ begin create type item_type as enum ('learn','build','both'); exception when duplicate_object then null; end $$;
 do $$ begin create type task_state as enum ('parked','todo','in_progress','complete'); exception when duplicate_object then null; end $$;
 do $$ begin create type notification_type as enum ('poke','assigned'); exception when duplicate_object then null; end $$;
 

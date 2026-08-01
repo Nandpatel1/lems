@@ -19,6 +19,7 @@ already applied to the current project.
 | 4 | `notifications.sql` | `notifications` table |
 | 5 | `referential-integrity.sql` | `tasks.resource_id` + the cascades, uniqueness and sync triggers |
 | 6 | `tasks-require-resource.sql` | Adopts orphan tasks into the library, then makes `resource_id` `NOT NULL` |
+| 7 | `item-type-both.sql` | Adds `'both'` to the `item_type` enum |
 
 ## The invariants the database enforces
 

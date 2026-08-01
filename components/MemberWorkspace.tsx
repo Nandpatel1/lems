@@ -23,6 +23,7 @@ import {
   type MemberTaskRow,
 } from "@/app/actions";
 import ConfirmDialog from "./ConfirmDialog";
+import TypeChip from "./TypeChip";
 
 /** How long the removed row takes to collapse. Matches `duration-base`. */
 const REMOVE_MS = 220;
@@ -309,6 +310,9 @@ export default function MemberWorkspace({
               <div>
                 <div className="mb-2 flex items-center gap-2">
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  {!selected.isFolder && (
+                    <TypeChip type={selected.type} state={selected.state} />
+                  )}
                   {selected.state === "complete" ? (
                     <span className="rounded-chip bg-ship-tint px-2 py-0.5 text-[11px] text-ship-ink">
                       Done
@@ -588,6 +592,11 @@ function Section({
                       >
                         {t.title}
                       </span>
+                      {/* Icon-only: this rail is 300px on desktop, so a full
+                          pill would eat the title at any viewport width. */}
+                      {!t.isFolder && (
+                        <TypeChip type={t.type} state={t.state} dense />
+                      )}
                       {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
                       {due && (
                         // Fades out as the button fades in, same 160ms, same

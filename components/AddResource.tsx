@@ -3,19 +3,17 @@
 import { useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { addResource, createFolder } from "@/app/actions";
+import type { ItemType } from "@/lib/types";
+import { TYPE_OPTIONS } from "./TypeChip";
 import Select from "./Select";
 import Modal from "./Modal";
 
 type FolderOpt = { id: string; name: string };
-type MemberOpt = { id: string; name: string };
 
-export default function AddResource({
-  folders,
-  members,
-}: {
-  folders: FolderOpt[];
-  members: MemberOpt[];
-}) {
+/** Capture only. Assigning an owner and a deadline is a separate, deliberate
+ *  step on the resource once it exists (see AssignControl), so this form stays
+ *  about *what* the thing is, not who has to do it. */
+export default function AddResource({ folders }: { folders: FolderOpt[] }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -24,11 +22,10 @@ export default function AddResource({
   const allFolders = [...folders, ...extraFolders];
 
   const [title, setTitle] = useState("");
+  const [type, setType] = useState<ItemType>("learn");
   const [folderId, setFolderId] = useState<string>(folders[0]?.id ?? "");
   const [source, setSource] = useState("");
   const [description, setDescription] = useState("");
-  const [assignTo, setAssignTo] = useState<string>("");
-  const [deadline, setDeadline] = useState("");
 
   const [newFolderMode, setNewFolderMode] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -36,11 +33,10 @@ export default function AddResource({
 
   function reset() {
     setTitle("");
+    setType("learn");
     setFolderId(folders[0]?.id ?? "");
     setSource("");
     setDescription("");
-    setAssignTo("");
-    setDeadline("");
     setError(null);
     setNewFolderMode(false);
     setNewFolderName("");
@@ -64,6 +60,20 @@ export default function AddResource({
     });
   }
 
+  /** Arrow keys move the selection and the focus together, wrapping at both
+   *  ends — the standard radiogroup behaviour. */
+  function selectByArrow(e: React.KeyboardEvent, i: number) {
+    const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
+    const fwd = e.key === "ArrowRight" || e.key === "ArrowDown";
+    if (!back && !fwd) return;
+    e.preventDefault();
+    const next =
+      (i + (fwd ? 1 : -1) + TYPE_OPTIONS.length) % TYPE_OPTIONS.length;
+    setType(TYPE_OPTIONS[next].value);
+    const group = e.currentTarget.parentElement;
+    group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+  }
+
   function submit() {
     if (!title.trim() || !folderId) {
       setError(!folderId ? "Please choose a folder" : "Title is required");
@@ -73,11 +83,10 @@ export default function AddResource({
     startTransition(async () => {
       const res = await addResource({
         title,
+        type,
         folderId,
         source,
         description,
-        assignTo: assignTo || null,
-        deadline: deadline || null,
       });
       if (res.ok) {
         reset();
@@ -107,6 +116,48 @@ export default function AddResource({
             placeholder="e.g. Advanced cold email tactics"
             className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
           />
+
+          {/* Directly after the title: what kind of work this is shapes how
+              everyone reads the rest of the form. */}
+          <div className="mt-3">
+            <label className="block text-[11px] text-ink-3">Type</label>
+            <div
+              role="radiogroup"
+              aria-label="Type"
+              className="mt-1 flex items-stretch gap-0.5 rounded-control border border-hair bg-surface p-0.5"
+            >
+              {TYPE_OPTIONS.map(({ value, label, Icon }, i) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={type === value}
+                  // Roving tabindex: the group is one tab stop, and arrows move
+                  // within it — what `role="radiogroup"` promises a screen
+                  // reader. Without this, Tab lands on all three and arrows do
+                  // nothing, which is the pattern half-implemented.
+                  tabIndex={type === value ? 0 : -1}
+                  onClick={() => setType(value)}
+                  onKeyDown={(e) => selectByArrow(e, i)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[13px] transition-colors duration-quick focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                    type === value
+                      ? "bg-accent-tint font-medium text-accent-ink"
+                      : "text-ink-2 hover:bg-surface-soft hover:text-ink"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-ink-3">
+              {type === "learn"
+                ? "Research & knowledge — something to absorb."
+                : type === "build"
+                ? "An action item — real work to ship."
+                : "Learn it, then ship something with it."}
+            </p>
+          </div>
 
           <div className="mt-3">
             <div className="flex items-center justify-between">
@@ -192,33 +243,9 @@ export default function AddResource({
             className="mt-1 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
           />
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] text-ink-3">Assign to</label>
-              <div className="mt-1">
-                <Select
-                  ariaLabel="Assign to"
-                  value={assignTo}
-                  onChange={setAssignTo}
-                  placeholder="No one"
-                  options={[
-                    { value: "", label: "No one (library only)" },
-                    ...members.map((m) => ({ value: m.id, label: m.name })),
-                  ]}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[11px] text-ink-3">Deadline</label>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                disabled={!assignTo}
-                className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
-              />
-            </div>
-          </div>
+          <p className="mt-3 text-[11px] text-ink-3">
+            Lands in the Library. Assign it to someone — with a deadline — from there.
+          </p>
 
           {error && <p className="mt-3 text-[12px] text-warm-ink">{error}</p>}
 

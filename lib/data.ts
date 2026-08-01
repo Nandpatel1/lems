@@ -80,6 +80,15 @@ export async function getCurrentProfile(): Promise<{ name: string; initial: stri
   }
 }
 
+/** A completed item counts as "learned" if it carried knowledge — which "both"
+ *  does as well as "learn". ("Applied" is the `applied` flag, set on completion
+ *  for build and both.) A "both" item therefore lands in each side of the
+ *  learned→applied ratio exactly once, which is the honest reading: you
+ *  absorbed it *and* you shipped with it. */
+function countsAsLearned(row: { type: string; state: string }): boolean {
+  return (row.type === "learn" || row.type === "both") && row.state === "complete";
+}
+
 function weekdayLabel(deadline: string | null): string | undefined {
   if (!deadline) return undefined;
   return new Date(deadline).toLocaleDateString("en-GB", { weekday: "short" });
@@ -157,9 +166,7 @@ export async function getToday(): Promise<TodayData> {
     );
     const active = tasks.filter((t: any) => t.state !== "complete");
     active.sort(byDeadline);
-    const learned = tasks.filter(
-      (t: any) => t.type === "learn" && t.state === "complete"
-    ).length;
+    const learned = tasks.filter(countsAsLearned).length;
     const applied = tasks.filter((t: any) => t.applied).length;
 
     return {
@@ -239,7 +246,7 @@ export async function getReadiness(): Promise<ReadinessData> {
       confidences: profiles
         .sort((a: any, b: any) => a.name.localeCompare(b.name))
         .map((p: any) => ({ id: p.id, name: p.name, initial: p.initial, score: p.score })),
-      learned: tasks.filter((t: any) => t.type === "learn" && t.state === "complete").length,
+      learned: tasks.filter(countsAsLearned).length,
       applied: tasks.filter((t: any) => t.applied).length,
     };
   } catch {

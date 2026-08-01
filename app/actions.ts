@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { CURRENT_USER } from "@/lib/constants";
 import { getCurrentUserId } from "@/lib/session";
+import type { ItemType, TaskState } from "@/lib/types";
 
 export interface ActionResult {
   ok: boolean;
@@ -31,6 +32,11 @@ function friendlyError(err: { code?: string; message: string }): string {
     return "That item was just removed from the library. Refresh and try again.";
   // 23505 = unique violation on (owner_id, resource_id).
   if (err.code === "23505") return "That's already assigned to them.";
+  // 22P02 = bad enum value. In practice this means the database hasn't had
+  // `supabase/item-type-both.sql` run against it yet, so "Both" isn't a type
+  // it knows. Say that, rather than leaking the raw Postgres text.
+  if (err.code === "22P02" && err.message.includes("item_type"))
+    return 'This database doesn\'t know the "Both" type yet — run supabase/item-type-both.sql, or pick Learn or Build for now.';
   return err.message;
 }
 
@@ -120,7 +126,8 @@ export async function getFolderDeletionImpact(
 }
 
 /** Mark a task done, with an optional brief of what got done (saved to its notes).
- *  Build tasks also count as "applied" (shipped real work). */
+ *  Build tasks — and "both" tasks, which carry an action item too — also count
+ *  as "applied" (shipped real work). */
 export async function completeTask(
   taskId: string,
   brief?: string
@@ -134,7 +141,7 @@ export async function completeTask(
     .eq("id", taskId)
     .single();
 
-  const applied = t?.type === "build";
+  const applied = t?.type === "build" || t?.type === "both";
   const trimmed = brief?.trim();
   const note = trimmed
     ? t?.note
@@ -154,11 +161,10 @@ export async function completeTask(
 
 export interface NewResource {
   title: string;
+  type: ItemType;
   folderId?: string | null;
   source?: string;
   description?: string;
-  assignTo?: string | null;
-  deadline?: string | null;
 }
 
 async function notifyAssignment(
@@ -196,44 +202,23 @@ export async function createFolder(
   return { ok: true, id: data?.id };
 }
 
-/** Capture a new resource into the shared library; optionally assign it to someone. */
+/** Capture a new resource into the shared library. Capture only — handing it to
+ *  someone with a deadline is a separate step (`assignResourceToMember`), so
+ *  adding to the library never silently puts work on a teammate's plate. */
 export async function addResource(input: NewResource): Promise<ActionResult> {
   const db = supabaseAdmin();
   if (!db) return { ok: false, error: "Supabase not configured" };
   if (!input.title.trim()) return { ok: false, error: "Title is required" };
   if (!input.folderId) return { ok: false, error: "Please choose a folder" };
 
-  const { data, error } = await db
-    .from("resources")
-    .insert({
-      title: input.title.trim(),
-      type: "learn",
-      folder_id: input.folderId,
-      source: input.source?.trim() || null,
-      description: input.description?.trim() || null,
-    })
-    .select("id, title, type, source, folder_id")
-    .single();
+  const { error } = await db.from("resources").insert({
+    title: input.title.trim(),
+    type: input.type ?? "learn",
+    folder_id: input.folderId,
+    source: input.source?.trim() || null,
+    description: input.description?.trim() || null,
+  });
   if (error) return { ok: false, error: friendlyError(error) };
-
-  if (input.assignTo && data) {
-    const { data: task, error: taskErr } = await db
-      .from("tasks")
-      .insert({
-        owner_id: input.assignTo,
-        resource_id: data.id,
-        title: data.title,
-        type: data.type,
-        source: data.source,
-        folder_id: data.folder_id,
-        state: "todo",
-        deadline: input.deadline || null,
-      })
-      .select("id")
-      .single();
-    if (taskErr) return { ok: false, error: friendlyError(taskErr) };
-    await notifyAssignment(db, input.assignTo, data.title, task?.id ?? null);
-  }
 
   revalidateAll();
   return { ok: true };
@@ -360,6 +345,7 @@ export async function saveResourceDescription(
 
 export interface TaskDetail {
   note: string | null;
+  type: ItemType;
   state: string;
   canComplete: boolean;
   comments: { id: string; author: string; body: string; createdAt: string }[];
@@ -368,9 +354,10 @@ export interface TaskDetail {
 /** Load a task's note, status, and comment thread. */
 export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   const db = supabaseAdmin();
-  if (!db) return { note: null, state: "todo", canComplete: false, comments: [] };
+  if (!db)
+    return { note: null, type: "learn", state: "todo", canComplete: false, comments: [] };
   const [{ data: task }, { data: comments }] = await Promise.all([
-    db.from("tasks").select("note, state, is_folder").eq("id", taskId).single(),
+    db.from("tasks").select("note, type, state, is_folder").eq("id", taskId).single(),
     db
       .from("comments")
       .select("id, body, created_at, author:profiles(name)")
@@ -380,6 +367,7 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   const state = task?.state ?? "todo";
   return {
     note: task?.note ?? null,
+    type: (task?.type as ItemType) ?? "learn",
     state,
     canComplete: state !== "complete" && !task?.is_folder,
     comments: (comments ?? []).map((c: any) => ({
@@ -394,8 +382,8 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
 export interface MemberTaskRow {
   id: string;
   title: string;
-  type: "learn" | "build";
-  state: string;
+  type: ItemType;
+  state: TaskState;
   deadline: string | null;
   note: string | null;
   isFolder: boolean;
