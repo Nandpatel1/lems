@@ -79,7 +79,6 @@ export default function MemberWorkspace({
   const [nudgeSent, setNudgeSent] = useState(false);
 
   const [confirmUnassign, setConfirmUnassign] = useState<MemberTaskRow | null>(null);
-  const [origin, setOrigin] = useState<"row" | "pane">("pane");
   /** The row mid-collapse: still rendered so it can animate out, but already
    *  excluded from every count. */
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -105,40 +104,22 @@ export default function MemberWorkspace({
   const counted = rows.filter((t) => t.id !== removingId);
   const active = counted.filter((t) => t.state !== "complete");
   const completed = counted.filter((t) => t.state === "complete");
-  const pct = counted.length
-    ? Math.round((completed.length / counted.length) * 100)
-    : 0;
 
   const selected = counted.find((t) => t.id === selectedId) ?? null;
 
-  function openUnassign(task: MemberTaskRow, from: "row" | "pane") {
-    setOrigin(from);
-    setConfirmUnassign(task);
-  }
-
   /** Collapse the row, swap the pane, then settle: refresh and move focus.
-   *  Everything visible starts at t=0 so the whole event reads as one beat. */
+   *  Everything visible starts at t=0 so the whole event reads as one beat.
+   *  Unassigning is only ever reachable from the detail pane, so the task
+   *  leaving is always the one on screen — focus goes back to the pane. */
   function afterUnassign(task: MemberTaskRow) {
-    const wasSelected = selectedId === task.id;
-    const nextId =
-      origin === "row"
-        ? (() => {
-            const ids = activeRows.map((t) => t.id);
-            const i = ids.indexOf(task.id);
-            return ids[i + 1] ?? ids[i - 1] ?? null;
-          })()
-        : null;
-
     setRemovingId(task.id);
     setLiveMsg(
       `Unassigned "${task.title}" from ${isSelf ? "your queue" : member.name}. It's still in the Library.`
     );
-    if (wasSelected) {
-      setSelectedId(null);
-      setNotice(task.title);
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
-      noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
-    }
+    setSelectedId(null);
+    setNotice(task.title);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
 
     // setTimeout, not onTransitionEnd: reduced-motion collapses the duration to
     // ~0 and the event would never fire, stranding the row on screen.
@@ -146,10 +127,7 @@ export default function MemberWorkspace({
       setRemovedIds((prev) => new Set(prev).add(task.id));
       setRemovingId(null);
       router.refresh();
-      const target = nextId
-        ? document.querySelector<HTMLElement>(`[data-task-row="${nextId}"]`)
-        : paneRef.current;
-      target?.focus();
+      paneRef.current?.focus();
     }, REMOVE_MS);
   }
 
@@ -212,23 +190,6 @@ export default function MemberWorkspace({
             {completed.length} shipped · {active.length} active
           </p>
         </div>
-        {/* Information, not a second way to assign — work is handed out from
-            the Library. Hidden under sm, where the header has no room. */}
-        {counted.length > 0 && (
-          <div
-            className="hidden shrink-0 items-center gap-2 sm:flex"
-            role="img"
-            aria-label={`${completed.length} of ${counted.length} assigned items shipped`}
-          >
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-soft">
-              <div
-                className="h-full rounded-full bg-ship transition-[width] duration-base ease-out"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <span className="text-[11px] tabular-nums text-ink-3">{pct}%</span>
-          </div>
-        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-[300px_1fr] md:items-start">
@@ -240,10 +201,7 @@ export default function MemberWorkspace({
             tasks={activeRows}
             selectedId={selectedId}
             removingId={removingId}
-            memberName={member.name}
-            isSelf={isSelf}
             onSelect={setSelectedId}
-            onUnassign={(t) => openUnassign(t, "row")}
           />
           <Section
             label={`Completed · ${completed.length}`}
@@ -251,8 +209,6 @@ export default function MemberWorkspace({
             tasks={completedRows}
             selectedId={selectedId}
             removingId={removingId}
-            memberName={member.name}
-            isSelf={isSelf}
             onSelect={setSelectedId}
           />
         </div>
@@ -339,7 +295,7 @@ export default function MemberWorkspace({
                       Neutral at rest: red-washing someone's shipped work would
                       read as an error state on their best output. */}
                   <button
-                    onClick={() => openUnassign(selected, "pane")}
+                    onClick={() => setConfirmUnassign(selected)}
                     aria-label={
                       isSelf
                         ? `Remove "${selected.title}" from your queue`
@@ -516,29 +472,23 @@ export default function MemberWorkspace({
   );
 }
 
+/** The picking rail: what the task is called, whether it has notes, and when
+ *  it's due. Nothing actionable lives here — unassigning is an object-level
+ *  action, so it waits in the detail pane where the task is actually open. */
 function Section({
   label,
   empty,
   tasks,
   selectedId,
   removingId,
-  memberName,
-  isSelf,
   onSelect,
-  onUnassign,
 }: {
   label: string;
   empty: string;
   tasks: MemberTaskRow[];
   selectedId: string | null;
   removingId: string | null;
-  memberName: string;
-  isSelf: boolean;
   onSelect: (id: string) => void;
-  /** Omitted for the Completed section on purpose: you can clear active work
-   *  straight from the list, but shipped work has to be opened first. That
-   *  removes the expensive mis-click instead of merely guarding it. */
-  onUnassign?: (task: MemberTaskRow) => void;
 }) {
   return (
     <section>
@@ -563,76 +513,45 @@ function Section({
                 }`}
               >
                 <div className="overflow-hidden">
-                  <div
-                    className={`group relative flex w-full items-center pr-2 transition-colors duration-quick ${
-                      selected ? "bg-accent-tint" : "hover:bg-surface-soft"
+                  <button
+                    data-task-row={t.id}
+                    onClick={() => onSelect(t.id)}
+                    aria-current={selected}
+                    className={`flex w-full items-center gap-2 py-2.5 pr-3 text-left outline-none transition-colors duration-quick ${
+                      selected
+                        ? "bg-accent-tint"
+                        : "hover:bg-surface-soft focus-visible:bg-surface-soft"
                     }`}
                   >
-                    <button
-                      data-task-row={t.id}
-                      onClick={() => onSelect(t.id)}
-                      aria-current={selected}
-                      className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left outline-none focus-visible:bg-surface-soft"
+                    <span
+                      aria-hidden="true"
+                      className={`h-9 w-[3px] shrink-0 rounded-r ${
+                        selected ? "bg-accent" : "bg-transparent"
+                      }`}
+                    />
+                    <TaskIcon t={t} selected={selected} />
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[12px] ${
+                        selected
+                          ? "font-medium text-accent-ink"
+                          : t.state === "complete"
+                          ? "text-ink-2"
+                          : "text-ink"
+                      }`}
                     >
+                      {t.title}
+                    </span>
+                    {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
+                    {due && (
                       <span
-                        aria-hidden="true"
-                        className={`h-9 w-[3px] shrink-0 rounded-r ${
-                          selected ? "bg-accent" : "bg-transparent"
-                        }`}
-                      />
-                      <TaskIcon t={t} selected={selected} />
-                      <span
-                        className={`min-w-0 flex-1 truncate text-[12px] ${
-                          selected
-                            ? "font-medium text-accent-ink"
-                            : t.state === "complete"
-                            ? "text-ink-2"
-                            : "text-ink"
+                        className={`shrink-0 text-[10px] ${
+                          due.overdue ? "text-warm-ink" : "text-ink-3"
                         }`}
                       >
-                        {t.title}
+                        {due.text}
                       </span>
-                      {/* Icon-only: this rail is 300px on desktop, so a full
-                          pill would eat the title at any viewport width. */}
-                      {!t.isFolder && (
-                        <TypeChip type={t.type} state={t.state} dense />
-                      )}
-                      {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
-                      {due && (
-                        // Fades out as the button fades in, same 160ms, same
-                        // spot — otherwise the button half-covers the date and
-                        // it reads as a rendering bug.
-                        <span
-                          className={`shrink-0 text-[10px] transition-opacity duration-quick md:group-hover:opacity-0 md:group-focus-within:opacity-0 ${
-                            due.overdue ? "text-warm-ink" : "text-ink-3"
-                          }`}
-                        >
-                          {due.text}
-                        </span>
-                      )}
-                    </button>
-
-                    {onUnassign && (
-                      // Overlaid above md so it costs no width at rest; static
-                      // and full touch-size below md, where there's no hover.
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUnassign(t);
-                        }}
-                        aria-label={
-                          isSelf
-                            ? `Remove "${t.title}" from your queue`
-                            : `Unassign "${t.title}" from ${memberName}`
-                        }
-                        className={`ml-1.5 grid h-9 w-9 shrink-0 place-items-center rounded-chip text-ink-3 transition duration-quick hover:bg-danger-tint hover:text-danger-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger md:absolute md:right-1.5 md:top-1/2 md:ml-0 md:h-7 md:w-7 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 ${
-                          selected ? "md:bg-accent-tint" : "md:bg-surface-soft"
-                        }`}
-                      >
-                        <UserMinus className="h-3.5 w-3.5" />
-                      </button>
                     )}
-                  </div>
+                  </button>
                 </div>
               </div>
             );

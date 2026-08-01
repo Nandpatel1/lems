@@ -1,13 +1,13 @@
-import { BookOpen, Hammer, Layers } from "lucide-react";
+import { BookOpen, Hammer } from "lucide-react";
 import type { ItemType, TaskState } from "@/lib/types";
 
 /** The single source of truth for how a type is named and coloured.
  *
- *  Only two colour buckets are available here: `warm` is reserved for
- *  deadlines/attention and `ship` is earned by shipping only, so borrowing
- *  either would fake urgency or fake credit. That leaves accent and neutral —
- *  which is why "both" shares Build's accent and is told apart by its icon
- *  rather than by a third colour. */
+ *  There are exactly two kinds of work: Learn and Build. An item can carry
+ *  both at once — the database still stores that as the single enum value
+ *  "both", but the UI never says that word. It wears both tags instead, so
+ *  "which of these is build work?" stays one visual target across every
+ *  screen. */
 const TYPES = {
   learn: {
     label: "Learn",
@@ -23,20 +23,36 @@ const TYPES = {
     chip: "bg-accent-tint text-accent-ink",
     ink: "text-accent-ink",
   },
-  both: {
-    label: "Both",
-    full: "Both — learn it, then ship it",
-    Icon: Layers,
-    chip: "bg-accent-tint text-accent-ink",
-    ink: "text-accent-ink",
-  },
 } as const;
+
+/** A single kind of work — what the picker offers and what a chip renders. */
+export type BaseType = keyof typeof TYPES;
 
 export const TYPE_OPTIONS = [
   { value: "learn", label: TYPES.learn.label, Icon: TYPES.learn.Icon },
   { value: "build", label: TYPES.build.label, Icon: TYPES.build.Icon },
-  { value: "both", label: TYPES.both.label, Icon: TYPES.both.Icon },
-] as const;
+] as const satisfies readonly { value: BaseType; label: string; Icon: unknown }[];
+
+/** Unpack a stored type into the kinds it actually is. Total by design: an
+ *  unknown value from the database falls back to Learn rather than crashing. */
+export function typeParts(type: ItemType): BaseType[] {
+  if (type === "both") return ["learn", "build"];
+  return [type === "build" ? "build" : "learn"];
+}
+
+/** The reverse, for the picker: both kinds selected is stored as "both". */
+export function composeType(parts: readonly BaseType[]): ItemType {
+  if (parts.length >= 2) return "both";
+  return parts[0] ?? "learn";
+}
+
+/** Prose form — "Learn", "Build", or "Learn & Build". For sentences and
+ *  aria-labels, where a chip can't go. */
+export function typeLabel(type: ItemType): string {
+  return typeParts(type)
+    .map((p) => TYPES[p].label)
+    .join(" & ");
+}
 
 export default function TypeChip({
   type,
@@ -47,32 +63,31 @@ export default function TypeChip({
   /** Only used to mute the chip when parked — parked-ness itself is signalled
    *  by the row's moon icon and meta text, not by hiding what the item is. */
   state?: TaskState;
-  /** Icon-only, no pill. For narrow rails (e.g. the 300px member list) where a
-   *  full pill would squeeze the title. */
+  /** Icons only, no pills. For narrow rails where full pills would squeeze the
+   *  title. */
   dense?: boolean;
 }) {
-  // Fall back rather than crash if the database ever hands us a value the UI
-  // doesn't know about yet.
-  const t = TYPES[type] ?? TYPES.learn;
-  const { Icon } = t;
+  const parts = typeParts(type);
   const muted = state === "parked" ? "opacity-60" : "";
 
-  if (dense) {
-    return (
-      <Icon
-        className={`h-3.5 w-3.5 shrink-0 ${t.ink} ${muted}`}
-        aria-label={t.label}
-      />
-    );
-  }
-
   return (
-    <span
-      title={t.full}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-chip px-2 py-0.5 text-[11px] ${t.chip} ${muted}`}
-    >
-      <Icon className="h-3 w-3" aria-hidden="true" />
-      {t.label}
+    <span className={`inline-flex shrink-0 items-center gap-1 ${muted}`}>
+      {parts.map((p) => {
+        const t = TYPES[p];
+        const { Icon } = t;
+        return dense ? (
+          <Icon key={p} className={`h-3.5 w-3.5 shrink-0 ${t.ink}`} aria-label={t.label} />
+        ) : (
+          <span
+            key={p}
+            title={t.full}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-chip px-2 py-0.5 text-[11px] ${t.chip}`}
+          >
+            <Icon className="h-3 w-3" aria-hidden="true" />
+            {t.label}
+          </span>
+        );
+      })}
     </span>
   );
 }

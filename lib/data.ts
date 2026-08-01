@@ -283,7 +283,7 @@ export async function getTeam(): Promise<TeamData> {
           name: p.name,
           initial: p.initial,
           shipped: own.filter((t: any) => t.state === "complete" || t.applied).length,
-          inProgress: own.filter((t: any) => t.state === "in_progress").length,
+          pending: own.filter((t: any) => t.state !== "complete").length,
           focus: p.focus ?? "",
         };
       });

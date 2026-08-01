@@ -50,15 +50,18 @@ export default async function TeamPage() {
               <ChevronRight className="ml-auto h-4 w-4 text-ink-3 transition-colors duration-quick group-hover:text-accent-ink" />
             </div>
 
-            <div className="mb-3 flex gap-4">
-              <div>
-                <p className="text-[20px] font-medium text-ship-ink">{m.shipped}</p>
-                <p className="text-[11px] text-ink-3">shipped</p>
-              </div>
-              <div>
-                <p className="text-[20px] font-medium text-accent-ink">{m.inProgress}</p>
-                <p className="text-[11px] text-ink-3">in progress</p>
-              </div>
+            {/* What's still on their plate — the only number that asks
+                anything of the reader. Shipped work is celebrated once, in the
+                banner above, rather than turning each card into a scoreboard. */}
+            <div className="mb-3">
+              <p
+                className={`text-[20px] font-medium ${
+                  m.pending > 0 ? "text-accent-ink" : "text-ink-3"
+                }`}
+              >
+                {m.pending}
+              </p>
+              <p className="text-[11px] text-ink-3">pending</p>
             </div>
 
             <div className="rounded-control bg-surface-soft px-3 py-2">

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Check } from "lucide-react";
 import { addResource, createFolder } from "@/app/actions";
-import type { ItemType } from "@/lib/types";
-import { TYPE_OPTIONS } from "./TypeChip";
+import { TYPE_OPTIONS, composeType, type BaseType } from "./TypeChip";
 import Select from "./Select";
 import Modal from "./Modal";
 
@@ -22,7 +21,9 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
   const allFolders = [...folders, ...extraFolders];
 
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<ItemType>("learn");
+  /** The kinds of work this is. Both selected == the stored "both" type — the
+   *  form asks what the thing *is*, not which of three boxes it fits in. */
+  const [types, setTypes] = useState<BaseType[]>(["learn"]);
   const [folderId, setFolderId] = useState<string>(folders[0]?.id ?? "");
   const [source, setSource] = useState("");
   const [description, setDescription] = useState("");
@@ -33,7 +34,7 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
 
   function reset() {
     setTitle("");
-    setType("learn");
+    setTypes(["learn"]);
     setFolderId(folders[0]?.id ?? "");
     setSource("");
     setDescription("");
@@ -60,18 +61,18 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
     });
   }
 
-  /** Arrow keys move the selection and the focus together, wrapping at both
-   *  ends — the standard radiogroup behaviour. */
-  function selectByArrow(e: React.KeyboardEvent, i: number) {
-    const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
-    const fwd = e.key === "ArrowRight" || e.key === "ArrowDown";
-    if (!back && !fwd) return;
-    e.preventDefault();
-    const next =
-      (i + (fwd ? 1 : -1) + TYPE_OPTIONS.length) % TYPE_OPTIONS.length;
-    setType(TYPE_OPTIONS[next].value);
-    const group = e.currentTarget.parentElement;
-    group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+  /** Toggle a kind on or off, keeping the canonical Learn-then-Build order.
+   *  The last one on can't be switched off — an item with no type at all isn't
+   *  a state worth having, so the control simply refuses rather than letting
+   *  the form fall into an error. */
+  function toggleType(value: BaseType) {
+    setTypes((prev) => {
+      if (prev.includes(value))
+        return prev.length === 1 ? prev : prev.filter((p) => p !== value);
+      return TYPE_OPTIONS.map((o) => o.value).filter(
+        (o) => o === value || prev.includes(o)
+      );
+    });
   }
 
   function submit() {
@@ -83,7 +84,7 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
     startTransition(async () => {
       const res = await addResource({
         title,
-        type,
+        type: composeType(types),
         folderId,
         source,
         description,
@@ -120,42 +121,58 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
           {/* Directly after the title: what kind of work this is shapes how
               everyone reads the rest of the form. */}
           <div className="mt-3">
-            <label className="block text-[11px] text-ink-3">Type</label>
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="text-[11px] text-ink-3">Type</label>
+              {/* Says up front that this isn't a one-of-three choice — the
+                  affordance for multi-select has to arrive before the click,
+                  not be discovered by trying it. */}
+              <span className="text-[11px] text-ink-3">Pick one or both</span>
+            </div>
             <div
-              role="radiogroup"
+              role="group"
               aria-label="Type"
               className="mt-1 flex items-stretch gap-0.5 rounded-control border border-hair bg-surface p-0.5"
             >
-              {TYPE_OPTIONS.map(({ value, label, Icon }, i) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={type === value}
-                  // Roving tabindex: the group is one tab stop, and arrows move
-                  // within it — what `role="radiogroup"` promises a screen
-                  // reader. Without this, Tab lands on all three and arrows do
-                  // nothing, which is the pattern half-implemented.
-                  tabIndex={type === value ? 0 : -1}
-                  onClick={() => setType(value)}
-                  onKeyDown={(e) => selectByArrow(e, i)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[13px] transition-colors duration-quick focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                    type === value
-                      ? "bg-accent-tint font-medium text-accent-ink"
-                      : "text-ink-2 hover:bg-surface-soft hover:text-ink"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              ))}
+              {TYPE_OPTIONS.map(({ value, label, Icon }) => {
+                const on = types.includes(value);
+                const locked = on && types.length === 1;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    // Checkboxes, not radios: each is independently on or off,
+                    // and each is its own tab stop — the standard behaviour a
+                    // screen reader is promised by this role.
+                    role="checkbox"
+                    aria-checked={on}
+                    title={locked ? "At least one type is required" : undefined}
+                    onClick={() => toggleType(value)}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[13px] transition-colors duration-quick focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                      on
+                        ? "bg-accent-tint font-medium text-accent-ink"
+                        : "text-ink-2 hover:bg-surface-soft hover:text-ink"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    {label}
+                    {/* Always occupies its space, so toggling never nudges the
+                        label sideways. */}
+                    <Check
+                      aria-hidden="true"
+                      className={`h-3.5 w-3.5 shrink-0 transition-opacity duration-quick ${
+                        on ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                  </button>
+                );
+              })}
             </div>
             <p className="mt-1 text-[11px] text-ink-3">
-              {type === "learn"
-                ? "Research & knowledge — something to absorb."
-                : type === "build"
+              {types.length === 2
+                ? "Learn it, then ship something with it."
+                : types[0] === "build"
                 ? "An action item — real work to ship."
-                : "Learn it, then ship something with it."}
+                : "Research & knowledge — something to absorb."}
             </p>
           </div>
 

@@ -33,10 +33,11 @@ function friendlyError(err: { code?: string; message: string }): string {
   // 23505 = unique violation on (owner_id, resource_id).
   if (err.code === "23505") return "That's already assigned to them.";
   // 22P02 = bad enum value. In practice this means the database hasn't had
-  // `supabase/item-type-both.sql` run against it yet, so "Both" isn't a type
-  // it knows. Say that, rather than leaking the raw Postgres text.
+  // `supabase/item-type-both.sql` run against it yet, so it can't store an
+  // item that is Learn *and* Build. Say that, rather than leaking the raw
+  // Postgres text.
   if (err.code === "22P02" && err.message.includes("item_type"))
-    return 'This database doesn\'t know the "Both" type yet — run supabase/item-type-both.sql, or pick Learn or Build for now.';
+    return "This database can't store Learn & Build together yet — run supabase/item-type-both.sql, or pick just one for now.";
   return err.message;
 }
 

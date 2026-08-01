@@ -37,15 +37,15 @@ export default function TeamBoard({
               <span className="text-[14px] font-medium text-ink">{m.name}</span>
             </div>
 
-            <div className="mb-3 flex gap-4">
-              <div>
-                <p className="text-[20px] font-medium text-ship-ink">{m.shipped}</p>
-                <p className="text-[11px] text-ink-3">shipped</p>
-              </div>
-              <div>
-                <p className="text-[20px] font-medium text-accent-ink">{m.inProgress}</p>
-                <p className="text-[11px] text-ink-3">in progress</p>
-              </div>
+            <div className="mb-3">
+              <p
+                className={`text-[20px] font-medium ${
+                  m.pending > 0 ? "text-accent-ink" : "text-ink-3"
+                }`}
+              >
+                {m.pending}
+              </p>
+              <p className="text-[11px] text-ink-3">pending</p>
             </div>
 
             <div className="rounded-control bg-surface-soft px-3 py-2">

@@ -138,9 +138,9 @@ export const libraryFolders: LibraryFolder[] = [
 export const allTags = ["email", "outreach", "seo", "brand", "socials", "launch", "practice"];
 
 export const teamMembers: TeamMember[] = [
-  { id: "n", name: "Nand", initial: "N", shipped: 2, inProgress: 2, focus: "Ship brand logo v1" },
-  { id: "a", name: "Aryan", initial: "A", shipped: 1, inProgress: 3, focus: "Meta Ads test campaign" },
-  { id: "r", name: "Rohan", initial: "R", shipped: 1, inProgress: 1, focus: "SEO audit of our site" },
+  { id: "n", name: "Nand", initial: "N", shipped: 2, pending: 2, focus: "Ship brand logo v1" },
+  { id: "a", name: "Aryan", initial: "A", shipped: 1, pending: 3, focus: "Meta Ads test campaign" },
+  { id: "r", name: "Rohan", initial: "R", shipped: 1, pending: 1, focus: "SEO audit of our site" },
 ];
 
 export const confidences: Confidence[] = [
