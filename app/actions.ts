@@ -435,8 +435,6 @@ export interface MemberTaskRow {
   deadline: string | null;
   note: string | null;
   isFolder: boolean;
-  /** Surfaced on the rail so a thread is findable without opening every task. */
-  commentCount: number;
 }
 
 /** All of a teammate's tasks (active + completed), newest first — for team review. */
@@ -445,28 +443,11 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
   if (!db) return [];
   const { data } = await db
     .from("tasks")
-    .select("id, title, type, state, deadline, note, is_folder, resource_id")
+    .select("id, title, type, state, deadline, note, is_folder")
     .eq("owner_id", memberId)
     .order("created_at", { ascending: false });
-  const tasks = data ?? [];
 
-  // One extra round trip for the whole rail, counted here rather than as a
-  // per-row aggregate — this list is one person's queue, not a feed. Counts
-  // are per resource, so the number matches the shared thread they'll open.
-  const counts = new Map<string, number>();
-  if (tasks.length > 0) {
-    const { data: rows } = await db
-      .from("comments")
-      .select("resource_id")
-      .in(
-        "resource_id",
-        tasks.map((t: any) => t.resource_id)
-      );
-    for (const r of rows ?? [])
-      counts.set(r.resource_id, (counts.get(r.resource_id) ?? 0) + 1);
-  }
-
-  return tasks.map((t: any) => ({
+  return (data ?? []).map((t: any) => ({
     id: t.id,
     title: t.title,
     type: t.type,
@@ -474,7 +455,6 @@ export async function getMemberTasks(memberId: string): Promise<MemberTaskRow[]>
     deadline: t.deadline ?? null,
     note: t.note ?? null,
     isFolder: t.is_folder ?? false,
-    commentCount: counts.get(t.resource_id) ?? 0,
   }));
 }
 
@@ -576,8 +556,9 @@ export async function addComment(taskId: string, body: string): Promise<ActionRe
   });
   if (error) return { ok: false, error: friendlyError(error) };
 
+  // No revalidate: nothing rendered on the server shows the discussion, and
+  // the poster's own view refetches the thread directly.
   await notifyComment(db, task.resource_id, trimmed, me);
-  revalidateAll();
   return { ok: true };
 }
 

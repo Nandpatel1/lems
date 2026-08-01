@@ -10,7 +10,6 @@ import {
   Circle,
   Folder,
   Moon,
-  MessageSquare,
   FileText,
   UserMinus,
   Library,
@@ -210,9 +209,6 @@ export default function MemberWorkspace({
       const d = await getTaskDetail(selectedId);
       setComments(d.comments);
       setAssignees(d.assignees);
-      // The rail's counts came from the server render — bring them back in
-      // step now the thread has one more entry.
-      router.refresh();
     });
   }
 
@@ -463,9 +459,11 @@ export default function MemberWorkspace({
   );
 }
 
-/** The picking rail: what the task is called, whether it has notes, and when
- *  it's due. Nothing actionable lives here — unassigning is an object-level
- *  action, so it waits in the detail pane where the task is actually open. */
+/** The picking rail: what the task is called and when it's due, and nothing
+ *  else — it exists to choose from, so anything you'd only read once the task
+ *  is open (notes, the discussion) stays in the detail pane. Nothing
+ *  actionable lives here either: unassigning is an object-level action and
+ *  waits where the task is actually open. */
 function Section({
   label,
   count,
@@ -652,20 +650,6 @@ function TaskRows({
                 >
                   {t.title}
                 </span>
-                {t.note && <FileText className="h-3 w-3 shrink-0 text-ink-3" />}
-                {/* A thread is the one thing on a row you can't infer from the
-                    title — so it earns its own mark. */}
-                {t.commentCount > 0 && (
-                  <span
-                    className="flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums text-ink-3"
-                    aria-label={`${t.commentCount} comment${
-                      t.commentCount === 1 ? "" : "s"
-                    }`}
-                  >
-                    <MessageSquare className="h-3 w-3" aria-hidden="true" />
-                    {t.commentCount}
-                  </span>
-                )}
                 {due && (
                   <span
                     className={`shrink-0 text-[10px] ${
