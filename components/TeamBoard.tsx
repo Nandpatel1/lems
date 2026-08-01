@@ -15,7 +15,7 @@ export default function TeamBoard({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {members.map((m) => (
           <section
             key={m.id}
@@ -28,34 +28,31 @@ export default function TeamBoard({
                 setSelected(m);
               }
             }}
-            className="cursor-pointer rounded-card border border-hair bg-surface p-4 transition-colors duration-quick hover:border-hair-strong hover:bg-surface-soft/40"
+            className="group flex cursor-pointer items-center gap-3 rounded-card border border-hair bg-surface px-4 py-3.5 transition-colors duration-quick hover:border-hair-strong hover:bg-surface-soft/40"
           >
-            <div className="mb-3 flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-accent-tint text-[13px] font-medium text-accent-ink">
-                {m.initial}
-              </span>
-              <span className="text-[14px] font-medium text-ink">{m.name}</span>
-            </div>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent-tint text-[15px] font-medium text-accent-ink">
+              {m.initial}
+            </span>
 
-            <div className="mb-3">
-              <p
-                className={`text-[20px] font-medium ${
-                  m.pending > 0 ? "text-accent-ink" : "text-ink-3"
-                }`}
-              >
-                {m.pending}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-[14px] font-medium text-ink">{m.name}</span>
+                {m.id === currentUid && (
+                  <span className="shrink-0 rounded-chip bg-surface-soft px-2 py-0.5 text-[10px] text-ink-3">
+                    you
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-[12px] text-ink-3">
+                {m.pending > 0 ? (
+                  <>
+                    <span className="font-medium text-accent-ink">{m.pending}</span> pending
+                  </>
+                ) : (
+                  "Nothing pending"
+                )}
               </p>
-              <p className="text-[11px] text-ink-3">pending</p>
             </div>
-
-            <div className="rounded-control bg-surface-soft px-3 py-2">
-              <p className="text-[11px] text-ink-3">now</p>
-              <p className="text-[12px] text-ink">{m.focus}</p>
-            </div>
-
-            {m.id === currentUid && (
-              <p className="mt-3 text-[11px] text-ink-3">This is you · tap to review</p>
-            )}
           </section>
         ))}
       </div>

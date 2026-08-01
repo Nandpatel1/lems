@@ -55,12 +55,9 @@ export interface TeamMember {
   id: string;
   name: string;
   initial: string;
-  /** Completed work. Feeds the team-wide "things shipped" line — the cards
-   *  themselves show what's left, not what's banked. */
-  shipped: number;
-  /** Everything not complete: todo, in progress, and parked alike. */
+  /** Everything not complete: todo, in progress, and parked alike. The team
+   *  board shows what's left, not what's banked. */
   pending: number;
-  focus: string;
 }
 
 export interface Confidence {

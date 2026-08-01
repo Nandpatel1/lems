@@ -134,8 +134,6 @@ function computeReadiness(ms: Milestone[]): number {
 
 export interface TodayData {
   founderName: string;
-  learned: number;
-  applied: number;
   tasks: Task[];
 }
 
@@ -166,13 +164,9 @@ export async function getToday(): Promise<TodayData> {
     );
     const active = tasks.filter((t: any) => t.state !== "complete");
     active.sort(byDeadline);
-    const learned = tasks.filter(countsAsLearned).length;
-    const applied = tasks.filter((t: any) => t.applied).length;
 
     return {
       founderName: profile?.name ?? seed.founder.name,
-      learned,
-      applied,
       tasks: active.map((t: any) => ({
         ...mapTask(t),
         folderName: t.folder_id ? folderMap.get(t.folder_id) : undefined,
@@ -181,8 +175,6 @@ export async function getToday(): Promise<TodayData> {
   } catch {
     return {
       founderName: seed.founder.name,
-      learned: seed.learnedThisWeek,
-      applied: seed.appliedThisWeek,
       tasks: [seed.focusTask, ...seed.otherTasks],
     };
   }
@@ -262,7 +254,6 @@ export async function getReadiness(): Promise<ReadinessData> {
 
 export interface TeamData {
   members: TeamMember[];
-  weeklyShipped: number;
 }
 
 export async function getTeam(): Promise<TeamData> {
@@ -271,25 +262,21 @@ export async function getTeam(): Promise<TeamData> {
     if (!db) throw new Error("no-db");
     const [{ data: profiles }, { data: tasks }] = await Promise.all([
       db.from("profiles").select("*"),
-      db.from("tasks").select("owner_id,state,applied"),
+      db.from("tasks").select("owner_id,state"),
     ]);
     if (!profiles || !tasks) throw new Error("empty");
     const members: TeamMember[] = profiles
       .sort((a: any, b: any) => a.name.localeCompare(b.name))
-      .map((p: any) => {
-        const own = tasks.filter((t: any) => t.owner_id === p.id);
-        return {
-          id: p.id,
-          name: p.name,
-          initial: p.initial,
-          shipped: own.filter((t: any) => t.state === "complete" || t.applied).length,
-          pending: own.filter((t: any) => t.state !== "complete").length,
-          focus: p.focus ?? "",
-        };
-      });
-    const weeklyShipped = members.reduce((s, m) => s + m.shipped, 0);
-    return { members, weeklyShipped };
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        initial: p.initial,
+        pending: tasks.filter(
+          (t: any) => t.owner_id === p.id && t.state !== "complete"
+        ).length,
+      }));
+    return { members };
   } catch {
-    return { members: seed.teamMembers, weeklyShipped: seed.weeklyShipped };
+    return { members: seed.teamMembers };
   }
 }

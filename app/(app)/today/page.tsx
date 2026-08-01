@@ -1,4 +1,3 @@
-import RatioChip from "@/components/RatioChip";
 import TodayInteractive from "@/components/TodayInteractive";
 import { getToday } from "@/lib/data";
 
@@ -14,17 +13,14 @@ export default async function TodayPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-[20px] font-medium text-ink">
-            Good evening, {data.founderName}
-          </h1>
-          <p className="mt-0.5 text-[12px] text-ink-3">
-            {today} · {data.tasks.length} {data.tasks.length === 1 ? "thing" : "things"} on
-            your plate
-          </p>
-        </div>
-        <RatioChip learned={data.learned} applied={data.applied} />
+      <div>
+        <h1 className="text-[20px] font-medium text-ink">
+          Good evening, {data.founderName}
+        </h1>
+        <p className="mt-0.5 text-[12px] text-ink-3">
+          {today} · {data.tasks.length} {data.tasks.length === 1 ? "thing" : "things"} on
+          your plate
+        </p>
       </div>
 
       <TodayInteractive tasks={data.tasks} />
