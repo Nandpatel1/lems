@@ -11,7 +11,6 @@ import {
   Folder,
   Moon,
   Send,
-  Bell,
   FileText,
   UserMinus,
   Library,
@@ -19,7 +18,6 @@ import {
 import {
   getTaskDetail,
   addComment,
-  pokeTeammate,
   unassignTask,
   type MemberTaskRow,
 } from "@/app/actions";
@@ -85,8 +83,6 @@ export default function MemberWorkspace({
   const [comment, setComment] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const [nudgeMsg, setNudgeMsg] = useState("");
-  const [nudgeSent, setNudgeSent] = useState(false);
 
   const [confirmUnassign, setConfirmUnassign] = useState<MemberTaskRow | null>(null);
   /** The row mid-collapse: still rendered so it can animate out, but already
@@ -164,17 +160,6 @@ export default function MemberWorkspace({
       await addComment(selectedId, body);
       const d = await getTaskDetail(selectedId);
       setComments(d.comments);
-    });
-  }
-
-  function sendNudge() {
-    if (!nudgeMsg.trim()) return;
-    const body = nudgeMsg.trim();
-    startTransition(async () => {
-      await pokeTeammate(member.id, selectedId, body);
-      setNudgeMsg("");
-      setNudgeSent(true);
-      setTimeout(() => setNudgeSent(false), 2000);
     });
   }
 
@@ -382,36 +367,6 @@ export default function MemberWorkspace({
                   </button>
                 </div>
               </div>
-
-              {/* Nudge composer */}
-              {!isSelf && (
-                <div className="border-t border-hair pt-3">
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-3">
-                    <Bell className="h-3.5 w-3.5" /> Send {member.name} a nudge
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={nudgeMsg}
-                      onChange={(e) => setNudgeMsg(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") sendNudge();
-                      }}
-                      placeholder={`e.g. Any update on "${selected.title}"?`}
-                      className="flex-1 rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-                    />
-                    <button
-                      onClick={sendNudge}
-                      disabled={pending || !nudgeMsg.trim()}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-control bg-accent px-3 py-2 text-[12px] font-medium text-white transition-transform duration-quick active:scale-[0.98] disabled:opacity-50"
-                    >
-                      <Bell className="h-3.5 w-3.5" /> Send
-                    </button>
-                  </div>
-                  {nudgeSent && (
-                    <p className="mt-1.5 text-[11px] text-ship-ink">Nudge sent.</p>
-                  )}
-                </div>
-              )}
 
             </div>
           )}
