@@ -11,8 +11,8 @@ export const founder = { name: "Nand", initial: "N" };
 
 export const founders: Founder[] = [
   { id: "n", name: "Nand", initial: "N" },
-  { id: "a", name: "Aryan", initial: "A" },
-  { id: "r", name: "Rohan", initial: "R" },
+  { id: "m", name: "Madhav", initial: "M" },
+  { id: "k", name: "Kedar", initial: "K" },
 ];
 
 export const readiness = 41;
@@ -61,7 +61,7 @@ export const otherTasks: Task[] = [
     title: "Advanced Meta Ads course",
     type: "learn",
     state: "parked",
-    parkedReason: "Aryan's on ads",
+    parkedReason: "Madhav's on ads",
   },
 ];
 
@@ -137,12 +137,12 @@ export const allTags = ["email", "outreach", "seo", "brand", "socials", "launch"
 
 export const teamMembers: TeamMember[] = [
   { id: "n", name: "Nand", initial: "N", pending: 2 },
-  { id: "a", name: "Aryan", initial: "A", pending: 3 },
-  { id: "r", name: "Rohan", initial: "R", pending: 1 },
+  { id: "m", name: "Madhav", initial: "M", pending: 3 },
+  { id: "k", name: "Kedar", initial: "K", pending: 1 },
 ];
 
 export const confidences: Confidence[] = [
   { id: "n", name: "Nand", initial: "N", score: 3 },
-  { id: "a", name: "Aryan", initial: "A", score: 4 },
-  { id: "r", name: "Rohan", initial: "R", score: 3 },
+  { id: "m", name: "Madhav", initial: "M", score: 4 },
+  { id: "k", name: "Kedar", initial: "K", score: 3 },
 ];

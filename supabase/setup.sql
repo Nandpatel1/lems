@@ -176,8 +176,8 @@ create trigger resources_sync_tasks
 -- ---------- seed ----------
 insert into profiles (id, name, initial, focus, score) values
   ('00000000-0000-0000-0000-000000000001','Nand','N','Ship our brand logo — v1',3),
-  ('00000000-0000-0000-0000-000000000002','Aryan','A','Meta Ads test campaign',4),
-  ('00000000-0000-0000-0000-000000000003','Rohan','R','SEO audit of our site',3);
+  ('00000000-0000-0000-0000-000000000002','Madhav','M','Meta Ads test campaign',4),
+  ('00000000-0000-0000-0000-000000000003','Kedar','K','SEO audit of our site',3);
 
 insert into folders (id, name, ordered) values
   ('00000000-0000-0000-0000-0000000000a1','Sales',true),
@@ -223,7 +223,7 @@ insert into tasks (owner_id, resource_id, title, type, state, deadline, is_folde
   ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-0000000000b5','Ship our brand logo — v1','build','in_progress', now() + interval '3 days', false, null, null, 90, 'The real deliverable behind everything you studied this week.', null),
   ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-0000000000b1','Cold email fundamentals — playlist','learn','todo', now() - interval '1 day', false, null, null, null, null, null),
   ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-0000000000b3','SEO foundations','learn','in_progress', null, true, 3, 7, null, null, null),
-  ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-0000000000c1','Advanced Meta Ads course','learn','parked', null, false, null, null, null, null, 'Aryan''s on ads');
+  ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-0000000000c1','Advanced Meta Ads course','learn','parked', null, false, null, null, null, null, 'Madhav''s on ads');
 
 -- Nand's completed-this-week (drives learned=6 / applied=4)
 insert into tasks (owner_id, resource_id, title, type, state, applied) values
