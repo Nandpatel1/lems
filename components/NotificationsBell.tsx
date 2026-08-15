@@ -1,20 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X } from "lucide-react";
 import type { AppNotification } from "@/lib/data";
 import { timeAgo } from "@/lib/relative-time";
-import {
-  clearNotifications,
-  dismissNotification,
-  fetchNotifications,
-} from "@/app/actions";
-
-/** How often an open tab re-checks. Notifications arrive from other people, so
- *  nothing local can invalidate them — but a founder leaves this tab open all
- *  day, and a bell that only updates on navigation reads as broken. */
-const POLL_MS = 60_000;
+import { useNotifications } from "./NotificationsProvider";
 
 /** What the row says, split into a headline and the quoted payload beneath it.
  *  Built here rather than stored as a sentence, so a renamed task reads right
@@ -76,41 +67,14 @@ function describe(n: AppNotification): { headline: React.ReactNode; detail?: str
 }
 
 export default function NotificationsBell({
-  items,
   placement = "sidebar",
 }: {
-  items: AppNotification[];
   placement?: "sidebar" | "header";
 }) {
   const router = useRouter();
-  const [list, setList] = useState(items);
+  const { items: list, drop, clearAll } = useNotifications();
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
-
-  // The server render is the source of truth on navigation; polling refreshes
-  // it in place between navigations.
-  useEffect(() => setList(items), [items]);
-
-  const refresh = useCallback(() => {
-    fetchNotifications()
-      .then(setList)
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const onFocus = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    const id = setInterval(onFocus, POLL_MS);
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
-    };
-  }, [refresh]);
 
   // Escape closes and hands focus back to the bell, so keyboard users aren't
   // dropped at the top of the document.
@@ -128,15 +92,6 @@ export default function NotificationsBell({
 
   const count = list.length;
 
-  /** Every row here is outstanding, so acting on one takes it off the list —
-   *  optimistically, then for real. */
-  function drop(id: string) {
-    setList((prev) => prev.filter((x) => x.id !== id));
-    startTransition(async () => {
-      await dismissNotification(id);
-    });
-  }
-
   function openNotification(n: AppNotification) {
     setOpen(false);
     drop(n.id);
@@ -145,13 +100,6 @@ export default function NotificationsBell({
     } else if (n.taskId && n.taskOwnerId) {
       router.push(`/team/${n.taskOwnerId}?task=${n.taskId}`);
     }
-  }
-
-  function clearAll() {
-    setList([]);
-    startTransition(async () => {
-      await clearNotifications();
-    });
   }
 
   return (

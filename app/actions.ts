@@ -727,6 +727,25 @@ export async function addTopicReply(
   return { ok: true };
 }
 
+/** Opening a topic is what "reading it" means, so it clears this person's
+ *  outstanding rows for that topic — the same rows the bell lists and the
+ *  Discuss badge counts. Deleted rather than flagged, matching how every other
+ *  notification in this app retires once it has done its job.
+ *
+ *  No revalidate: the caller drops them from the shared client state at the
+ *  same moment, and the next server render reads a table that already agrees. */
+export async function markTopicSeen(topicId: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db
+    .from("notifications")
+    .delete()
+    .eq("recipient_id", await currentUid())
+    .eq("topic_id", topicId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export interface TopicDeletionImpact {
   replies: number;
   /** Distinct people who have written in the thread — what's actually at stake

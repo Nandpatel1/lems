@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { timeAgo } from "@/lib/relative-time";
 import TopicStateSelect from "./TopicStateSelect";
 import TopicDeleteButton from "./TopicDeleteButton";
+import { useNotifications } from "./NotificationsProvider";
 import type { Topic } from "@/lib/types";
 
 /** One tile in the Discuss grid.
@@ -21,23 +24,47 @@ import type { Topic } from "@/lib/types";
  *  as a rendering fault rather than as brevity. */
 export default function TopicCard({ topic }: { topic: Topic }) {
   const active = topic.state === "active";
+  const { unseenTopics } = useNotifications();
+  /** Something happened here that this person hasn't opened yet. Cleared by
+   *  visiting the topic — or by dismissing its row in the bell, which is the
+   *  same claim made a different way. */
+  const unseen = unseenTopics.has(topic.id);
 
   return (
-    <article className="flex flex-col rounded-card border border-hair bg-surface transition-colors duration-quick hover:border-hair-strong">
+    <article
+      className={`flex flex-col rounded-card border bg-surface transition-colors duration-quick ${
+        unseen ? "border-accent" : "border-hair hover:border-hair-strong"
+      }`}
+    >
       <Link
         href={`/discuss/${topic.id}`}
         className="flex flex-col rounded-t-card px-4 pb-3 pt-3.5 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
-        <h2
-          className={`line-clamp-2 text-[14px] font-medium leading-snug ${
-            active ? "text-ink" : "text-ink-2"
-          }`}
-        >
-          {topic.title}
-        </h2>
+        {/* The dot sits in its own gutter rather than inline, so a title that
+            wraps to two lines doesn't wrap around it. Only unseen cards pay
+            for the gutter — reserving it on every card to keep titles flush
+            would cost width on every card to serve a minority of them. */}
+        <div className="flex items-start gap-2">
+          {unseen && (
+            <span
+              aria-hidden="true"
+              className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+            />
+          )}
+          <h2
+            className={`line-clamp-2 flex-1 text-[14px] font-medium leading-snug ${
+              active ? "text-ink" : "text-ink-2"
+            }`}
+          >
+            {unseen && <span className="sr-only">New activity: </span>}
+            {topic.title}
+          </h2>
+        </div>
 
         <p className="mt-1 text-[11px] text-ink-3">
-          <span className="text-ink-2">{topic.author}</span>
+          <span className={unseen ? "font-medium text-accent-ink" : "text-ink-2"}>
+            {topic.author}
+          </span>
           <span aria-hidden="true"> · </span>
           {timeAgo(topic.lastActivityAt)}
         </p>

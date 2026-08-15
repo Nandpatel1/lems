@@ -7,6 +7,7 @@ import { Rocket, Plus } from "lucide-react";
 import { getCurrentUserId } from "@/lib/session";
 import { getCurrentProfile, getNotifications } from "@/lib/data";
 import NotificationsBell from "@/components/NotificationsBell";
+import NotificationsProvider from "@/components/NotificationsProvider";
 
 export default async function AppLayout({
   children,
@@ -21,8 +22,12 @@ export default async function AppLayout({
   ]);
 
   return (
-    <div className="flex min-h-screen bg-canvas">
-      <Sidebar currentName={profile.name} notifications={notifications} />
+    // One notification list for the shell: the bell, the Discuss tab badge and
+    // every topic card read the same state, so they can't disagree about what
+    // you've already seen.
+    <NotificationsProvider initial={notifications}>
+      <div className="flex min-h-screen bg-canvas">
+      <Sidebar currentName={profile.name} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="md:hidden flex items-center justify-between border-b border-hair bg-surface-soft px-4 py-3">
           <div className="flex items-center gap-2">
@@ -32,7 +37,7 @@ export default async function AppLayout({
             <span className="text-[14px] font-medium text-ink">Launchpad</span>
           </div>
           <div className="flex items-center gap-3">
-            <NotificationsBell items={notifications} placement="header" />
+            <NotificationsBell placement="header" />
             <ThemeToggle />
             <Link
               href="/library"
@@ -47,6 +52,7 @@ export default async function AppLayout({
         </main>
         <BottomNav />
       </div>
-    </div>
+      </div>
+    </NotificationsProvider>
   );
 }

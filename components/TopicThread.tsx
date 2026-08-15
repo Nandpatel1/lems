@@ -63,24 +63,25 @@ export default function TopicThread({
 
   return (
     <section>
-      <p className="mb-3 flex items-center gap-1.5 text-[11px] text-ink-3">
+      {/* <p className="mb-3 flex items-center gap-1.5 text-[11px] text-ink-3">
         <MessageSquare className="h-3.5 w-3.5" />
         Replies
         {replies.length > 0 && <span className="tabular-nums">· {replies.length}</span>}
-      </p>
+      </p> */}
 
       <ThreadLog
         entries={shown}
         currentUid={currentUid}
         pendingIds={pendingIds}
         empty={
-          <div className="rounded-control border border-dashed border-hair px-3.5 py-3">
-            <p className="text-[12px] text-ink-2">No replies yet.</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
-              Say what you think — agreement counts too. A topic nobody answers
-              reads like nobody read it.
-            </p>
-          </div>
+          // <div className="rounded-control border border-dashed border-hair px-3.5 py-3">
+          //   <p className="text-[12px] text-ink-2">No replies yet.</p>
+          //   <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+          //     Say what you think — agreement counts too. A topic nobody answers
+          //     reads like nobody read it.
+          //   </p>
+          // </div>
+          <></>
         }
       />
 

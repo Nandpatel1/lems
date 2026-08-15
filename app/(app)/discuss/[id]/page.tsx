@@ -6,6 +6,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { shortDate } from "@/lib/relative-time";
 import TopicStateSelect from "@/components/TopicStateSelect";
 import TopicDeleteButton from "@/components/TopicDeleteButton";
+import MarkTopicSeen from "@/components/MarkTopicSeen";
 import TopicThread from "@/components/TopicThread";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ export default async function TopicPage({
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5">
+      {/* Being here is what marks it read. */}
+      <MarkTopicSeen topicId={topic.id} />
+
       <Link
         href="/discuss"
         className="-ml-1 inline-flex w-fit items-center gap-1 rounded-control px-1 py-0.5 text-[12px] text-ink-3 outline-none transition-colors duration-quick hover:text-ink-2 focus-visible:ring-2 focus-visible:ring-accent"
