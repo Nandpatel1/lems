@@ -156,10 +156,15 @@ create index topic_replies_topic_id_idx      on topic_replies (topic_id, created
 create index topic_replies_topic_author_idx  on topic_replies (topic_id, author_id);
 
 -- ---------- a reply keeps its topic at the top of the list ----------
+-- search_path pinned empty (references schema-qualified) so the function can't
+-- be hijacked by a caller's search_path.
 create or replace function topics_touch_activity() returns trigger
-language plpgsql as $$
+language plpgsql
+security invoker
+set search_path = ''
+as $$
 begin
-  update topics set last_activity_at = new.created_at where id = new.topic_id;
+  update public.topics set last_activity_at = new.created_at where id = new.topic_id;
   return null;
 end $$;
 
