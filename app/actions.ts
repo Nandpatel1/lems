@@ -727,6 +727,47 @@ export async function addTopicReply(
   return { ok: true };
 }
 
+export interface TopicDeletionImpact {
+  replies: number;
+  /** Distinct people who have written in the thread — what's actually at stake
+   *  when the topic goes. */
+  people: number;
+}
+
+/** What deleting a topic would take with it, so the confirm step can say it
+ *  out loud instead of quietly wiping a conversation other people wrote. */
+export async function getTopicDeletionImpact(
+  topicId: string
+): Promise<TopicDeletionImpact> {
+  const db = supabaseAdmin();
+  if (!db) return { replies: 0, people: 0 };
+  const { data } = await db
+    .from("topic_replies")
+    .select("author_id")
+    .eq("topic_id", topicId);
+  const rows = data ?? [];
+  return {
+    replies: rows.length,
+    people: new Set(rows.map((r: any) => r.author_id).filter(Boolean)).size,
+  };
+}
+
+/** Permanently delete a topic. Its replies go with it via the cascade, and so
+ *  do any notifications pointing at it — a bell row that opens a dead page is
+ *  worse than no row at all.
+ *
+ *  Not restricted to whoever started it. A topic belongs to the team, the same
+ *  reasoning that lets anyone flip its state; the confirm step names what's
+ *  being destroyed, which is the guard that actually helps. */
+export async function deleteTopic(topicId: string): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db.from("topics").delete().eq("id", topicId);
+  if (error) return { ok: false, error: friendlyError(error) };
+  revalidateDiscuss();
+  return { ok: true };
+}
+
 /** Flip a topic between Active and Inactive. Anyone can, at any time, in either
  *  direction — it says whether this is a live conversation, and that is a
  *  judgement the whole team shares rather than the starter's to own.

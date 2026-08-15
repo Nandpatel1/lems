@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { timeAgo } from "@/lib/relative-time";
 import TopicStateSelect from "./TopicStateSelect";
+import TopicDeleteButton from "./TopicDeleteButton";
 import type { Topic } from "@/lib/types";
 
 /** One tile in the Discuss grid.
@@ -71,7 +72,12 @@ export default function TopicCard({ topic }: { topic: Topic }) {
           </span>
         </span>
 
-        <TopicStateSelect topicId={topic.id} state={topic.state} />
+        {/* items-stretch so the trash matches the select's height exactly —
+            two controls of the same weight, side by side. */}
+        <span className="flex shrink-0 items-stretch gap-1.5">
+          <TopicStateSelect topicId={topic.id} state={topic.state} />
+          <TopicDeleteButton topicId={topic.id} title={topic.title} />
+        </span>
       </div>
     </article>
   );

@@ -5,6 +5,7 @@ import { getTopicDetail, getCurrentProfile } from "@/lib/data";
 import { getCurrentUserId } from "@/lib/session";
 import { shortDate } from "@/lib/relative-time";
 import TopicStateSelect from "@/components/TopicStateSelect";
+import TopicDeleteButton from "@/components/TopicDeleteButton";
 import TopicThread from "@/components/TopicThread";
 
 export const dynamic = "force-dynamic";
@@ -39,8 +40,14 @@ export default async function TopicPage({
           <h1 className="text-[20px] font-medium leading-snug text-ink">
             {topic.title}
           </h1>
-          <div className="pt-0.5">
+          <div className="flex shrink-0 items-stretch gap-1.5 pt-0.5">
             <TopicStateSelect topicId={topic.id} state={topic.state} size="md" />
+            <TopicDeleteButton
+              topicId={topic.id}
+              title={topic.title}
+              // Deleting what you're reading has to take you somewhere.
+              redirectTo="/discuss"
+            />
           </div>
         </div>
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-3">
