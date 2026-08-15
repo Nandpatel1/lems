@@ -66,3 +66,42 @@ export interface Confidence {
   initial: string;
   score: number;
 }
+
+/** Whether a topic is a live conversation. An attention signal, not a lock —
+ *  an inactive topic still takes replies, and anyone can flip it back. */
+export type TopicState = "active" | "inactive";
+
+/** A general-discussion topic: an idea, a doubt, or a note that isn't work.
+ *  It belongs to the team rather than to a person's plate, which is why it has
+ *  no owner, no deadline and no type — only a state and a thread. */
+export interface Topic {
+  id: string;
+  title: string;
+  description?: string;
+  state: TopicState;
+  /** Who started it. Null id once their profile is gone — the writing stays. */
+  author: string;
+  authorId: string | null;
+  authorInitial: string;
+  createdAt: string;
+  /** Newest reply, or creation time if there are none. What the list sorts by. */
+  lastActivityAt: string;
+  replyCount: number;
+  /** Everyone who has written here, starter first — the avatar stack. */
+  participants: Founder[];
+}
+
+/** Deliberately the same shape as `TaskComment`, so both threads render
+ *  through the same log component. */
+export interface TopicReply {
+  id: string;
+  author: string;
+  authorId: string | null;
+  authorInitial: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface TopicDetail extends Topic {
+  replies: TopicReply[];
+}

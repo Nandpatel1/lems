@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X } from "lucide-react";
 import type { AppNotification } from "@/lib/data";
+import { timeAgo } from "@/lib/relative-time";
 import {
   clearNotifications,
   dismissNotification,
@@ -14,19 +15,6 @@ import {
  *  nothing local can invalidate them — but a founder leaves this tab open all
  *  day, and a bell that only updates on navigation reads as broken. */
 const POLL_MS = 60_000;
-
-/** Anything past this is stale enough that a date beats "3 days ago". */
-const RELATIVE_LIMIT_MS = 6 * 24 * 60 * 60 * 1000;
-
-function timeAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const diff = Date.now() - then;
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < RELATIVE_LIMIT_MS) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 /** What the row says, split into a headline and the quoted payload beneath it.
  *  Built here rather than stored as a sentence, so a renamed task reads right
@@ -43,6 +31,30 @@ function describe(n: AppNotification): { headline: React.ReactNode; detail?: str
         <>
           <span className="font-medium text-ink">{who}</span> commented on{" "}
           <span className="font-medium text-ink">{n.taskTitle ?? "a task"}</span>
+        </>
+      ),
+      detail: n.body,
+    };
+  }
+  if (n.type === "topic") {
+    return {
+      headline: (
+        <>
+          <span className="font-medium text-ink">{who}</span> started{" "}
+          <span className="font-medium text-ink">{n.topicTitle ?? "a topic"}</span>
+        </>
+      ),
+      // A title-only topic has an empty body; showing empty quotes would
+      // suggest something was said and then swallowed.
+      detail: n.body || undefined,
+    };
+  }
+  if (n.type === "topic_reply") {
+    return {
+      headline: (
+        <>
+          <span className="font-medium text-ink">{who}</span> replied in{" "}
+          <span className="font-medium text-ink">{n.topicTitle ?? "a topic"}</span>
         </>
       ),
       detail: n.body,
@@ -128,7 +140,9 @@ export default function NotificationsBell({
   function openNotification(n: AppNotification) {
     setOpen(false);
     drop(n.id);
-    if (n.taskId && n.taskOwnerId) {
+    if (n.topicId) {
+      router.push(`/discuss/${n.topicId}`);
+    } else if (n.taskId && n.taskOwnerId) {
       router.push(`/team/${n.taskOwnerId}?task=${n.taskId}`);
     }
   }
@@ -196,7 +210,7 @@ export default function NotificationsBell({
                   You&apos;re all caught up
                 </p>
                 <p className="mt-0.5 text-[11px] text-ink-3">
-                  Replies on work you share land here.
+                  Replies on shared work and team topics land here.
                 </p>
               </div>
             ) : (

@@ -10,13 +10,16 @@
 -- ---------- enums ----------
 do $$ begin create type item_type as enum ('learn','build','both'); exception when duplicate_object then null; end $$;
 do $$ begin create type task_state as enum ('parked','todo','in_progress','complete'); exception when duplicate_object then null; end $$;
-do $$ begin create type notification_type as enum ('poke','assigned','comment'); exception when duplicate_object then null; end $$;
--- A database created before comment notifications existed has the two-value
--- enum. Widen it here so a re-run of this file matches a migrated database.
+do $$ begin create type notification_type as enum ('poke','assigned','comment','topic','topic_reply'); exception when duplicate_object then null; end $$;
+do $$ begin create type topic_state as enum ('active','inactive'); exception when duplicate_object then null; end $$;
+-- A database created before comment or topic notifications existed has a
+-- narrower enum. Widen it here so a re-run of this file matches a migrated one.
 alter type notification_type add value if not exists 'comment';
+alter type notification_type add value if not exists 'topic';
+alter type notification_type add value if not exists 'topic_reply';
 
 -- ---------- reset ----------
-drop table if exists comments, notifications, tasks, resources, folders, milestones, profiles cascade;
+drop table if exists topic_replies, topics, comments, notifications, tasks, resources, folders, milestones, profiles cascade;
 
 -- ---------- tables ----------
 create table profiles (
@@ -95,13 +98,41 @@ create table comments (
   created_at timestamptz not null default now()
 );
 
+-- General discussion: the things that aren't work. An idea, a doubt, or
+-- something the others should know is not a resource with a deadline, and
+-- forcing it through the task pipeline either buries it or puts a fake deadline
+-- on a conversation. A topic belongs to the team, not to anyone's plate.
+--
+-- Active/Inactive is an attention signal, not a lock — an inactive topic still
+-- takes replies, because conversations come back to life.
+create table topics (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid references profiles(id) on delete set null,
+  title text not null,
+  description text,
+  state topic_state not null default 'active',
+  created_at timestamptz not null default now(),
+  -- Denormalised so the list sorts by liveliness without reading every reply.
+  last_activity_at timestamptz not null default now()
+);
+
+create table topic_replies (
+  id uuid primary key default gen_random_uuid(),
+  topic_id uuid not null references topics(id) on delete cascade,
+  author_id uuid references profiles(id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
 -- A nudge about a task that no longer exists is noise, not history.
+-- task_id and topic_id are alternatives: a row points at exactly one of them.
 create table notifications (
   id uuid primary key default gen_random_uuid(),
   recipient_id uuid not null references profiles(id) on delete cascade,
   actor_id uuid references profiles(id) on delete set null,
   type notification_type not null default 'poke',
   task_id uuid references tasks(id) on delete cascade,
+  topic_id uuid references topics(id) on delete cascade,
   body text not null,
   read boolean not null default false,
   created_at timestamptz not null default now()
@@ -118,6 +149,23 @@ create index notifications_recipient_idx on notifications (recipient_id, created
 -- newest one, and works out who's in a thread by reading its comment authors.
 create index notifications_thread_unread_idx on notifications (recipient_id, task_id) where read = false;
 create index comments_resource_author_idx    on comments (resource_id, author_id);
+create index notifications_topic_id_idx      on notifications (topic_id);
+create index topics_last_activity_idx        on topics (last_activity_at desc);
+create index topic_replies_topic_id_idx      on topic_replies (topic_id, created_at);
+-- The topic list builds each participant stack from its reply authors.
+create index topic_replies_topic_author_idx  on topic_replies (topic_id, author_id);
+
+-- ---------- a reply keeps its topic at the top of the list ----------
+create or replace function topics_touch_activity() returns trigger
+language plpgsql as $$
+begin
+  update topics set last_activity_at = new.created_at where id = new.topic_id;
+  return null;
+end $$;
+
+create trigger topic_replies_touch_topic
+  after insert on topic_replies
+  for each row execute function topics_touch_activity();
 
 -- ---------- identity stays in sync with the library, in both directions ----------
 create or replace function tasks_sync_from_resource() returns trigger
@@ -243,6 +291,33 @@ insert into tasks (owner_id, resource_id, title, type, state, applied) values
   ('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-0000000000b7','SEO audit of our site','build','in_progress',false),
   ('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-0000000000b8','On-page checklist','build','complete',true);
 
+-- Discussion topics. last_activity_at is left to the trigger: inserting the
+-- replies below is what floats each topic to its right place in the list.
+insert into topics (id, author_id, title, description, state) values
+  ('00000000-0000-0000-0000-0000000000e1','00000000-0000-0000-0000-000000000003',
+   'Should we niche down to one industry?',
+   'We keep pitching everyone and our case studies look scattered. Wondering if picking one vertical for the next 6 months would make the outreach write itself. Not proposing it yet — want to hear where you two land.',
+   'active'),
+  ('00000000-0000-0000-0000-0000000000e2','00000000-0000-0000-0000-000000000002',
+   'Doubt: how are we pricing retainers?',
+   'A lead asked for monthly and I froze. Do we have a number, or are we quoting per project every time?',
+   'active'),
+  ('00000000-0000-0000-0000-0000000000e3','00000000-0000-0000-0000-000000000001',
+   'Note: moved all brand files to the shared drive',
+   'Logos, fonts and the colour sheet now live under Brand/ on the shared drive. Stop using the ones in your downloads folder.',
+   'inactive');
+
+insert into topic_replies (topic_id, author_id, body, created_at) values
+  ('00000000-0000-0000-0000-0000000000e1','00000000-0000-0000-0000-000000000001',
+   'I''m for it. Our two best results are both D2C — leading with that costs us nothing and the deck gets easier to write.',
+   now() - interval '2 days'),
+  ('00000000-0000-0000-0000-0000000000e1','00000000-0000-0000-0000-000000000002',
+   'Agreed on the positioning, but let''s not turn away work outside it while we''re this early. Niche the marketing, not the invoice.',
+   now() - interval '1 day'),
+  ('00000000-0000-0000-0000-0000000000e2','00000000-0000-0000-0000-000000000001',
+   'No number yet. Let''s set a floor this week so nobody has to freeze again.',
+   now() - interval '4 hours');
+
 -- ---------- RLS policies ----------
 -- This project auto-enables RLS on new tables. Without policies the anon
 -- (publishable) key the app uses in the browser is blocked from all rows.
@@ -251,7 +326,7 @@ insert into tasks (owner_id, resource_id, title, type, state, applied) values
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','folders','resources','milestones','tasks','comments','notifications']
+  foreach t in array array['profiles','folders','resources','milestones','tasks','comments','notifications','topics','topic_replies']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists %I on public.%I', t||'_all_select', t);

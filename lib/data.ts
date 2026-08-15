@@ -8,6 +8,8 @@ import type {
   TeamMember,
   Confidence,
   Founder,
+  Topic,
+  TopicDetail,
 } from "./types";
 import * as seed from "./seed";
 
@@ -29,7 +31,12 @@ export async function getProfiles(): Promise<Founder[]> {
   }
 }
 
-export type NotificationType = "comment" | "assigned" | "poke";
+export type NotificationType =
+  | "comment"
+  | "assigned"
+  | "poke"
+  | "topic"
+  | "topic_reply";
 
 /** Actor and task are joined at read time rather than baked into `body`, so a
  *  renamed resource or person reads correctly in notifications sent before the
@@ -46,6 +53,10 @@ export interface AppNotification {
   /** Whose workspace the task lives in — a thread participant is often not the
    *  owner, so this, not the recipient, is what the deep link points at. */
   taskOwnerId?: string;
+  /** Set instead of taskId when the notification is about a discussion topic.
+   *  A row points at one or the other, never both. */
+  topicId?: string;
+  topicTitle?: string;
   actorName?: string;
   actorInitial?: string;
 }
@@ -57,40 +68,58 @@ function one<T>(rel: T | T[] | null | undefined): T | null {
   return Array.isArray(rel) ? rel[0] ?? null : rel;
 }
 
+// notifications points at profiles twice (recipient, actor), so the actor join
+// has to name its constraint or Postgrest can't disambiguate.
+const NOTIFICATION_BASE =
+  "id, type, body, read, created_at, task_id, " +
+  "actor:profiles!notifications_actor_id_fkey(name, initial), " +
+  "task:tasks(title, owner_id)";
+
+const NOTIFICATION_SELECT = `${NOTIFICATION_BASE}, topic_id, topic:topics(title)`;
+
+function mapNotification(n: any): AppNotification {
+  const actor = one<any>(n.actor);
+  const task = one<any>(n.task);
+  const topic = one<any>(n.topic);
+  return {
+    id: n.id,
+    type: n.type,
+    body: n.body,
+    read: n.read,
+    createdAt: n.created_at,
+    taskId: n.task_id ?? undefined,
+    taskTitle: task?.title ?? undefined,
+    taskOwnerId: task?.owner_id ?? undefined,
+    topicId: n.topic_id ?? undefined,
+    topicTitle: topic?.title ?? undefined,
+    actorName: actor?.name ?? undefined,
+    actorInitial: actor?.initial ?? undefined,
+  };
+}
+
 export async function getNotifications(): Promise<AppNotification[]> {
   const db = supabaseAdmin();
   const uid = await getCurrentUserId();
   try {
     if (!db || !uid) throw new Error("no");
-    const { data, error } = await db
-      .from("notifications")
-      // notifications points at profiles twice (recipient, actor), so the
-      // actor join has to name its constraint or Postgrest can't disambiguate.
-      .select(
-        "id, type, body, read, created_at, task_id, " +
-          "actor:profiles!notifications_actor_id_fkey(name, initial), " +
-          "task:tasks(title, owner_id)"
-      )
-      .eq("recipient_id", uid)
-      .order("created_at", { ascending: false })
-      .limit(20);
+    const read = (select: string) =>
+      db
+        .from("notifications")
+        .select(select)
+        .eq("recipient_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+    // A database that hasn't had supabase/discussions.sql run against it has no
+    // topics table, and asking for the join fails the whole query. Falling back
+    // to the task-only shape keeps the bell working there rather than going
+    // silently empty — the one thing worse than missing topic notifications is
+    // missing all of them.
+    let { data, error } = await read(NOTIFICATION_SELECT);
+    if (error) ({ data, error } = await read(NOTIFICATION_BASE));
     if (error) throw error;
-    return (data ?? []).map((n: any) => {
-      const actor = one<any>(n.actor);
-      const task = one<any>(n.task);
-      return {
-        id: n.id,
-        type: n.type,
-        body: n.body,
-        read: n.read,
-        createdAt: n.created_at,
-        taskId: n.task_id ?? undefined,
-        taskTitle: task?.title ?? undefined,
-        taskOwnerId: task?.owner_id ?? undefined,
-        actorName: actor?.name ?? undefined,
-        actorInitial: actor?.initial ?? undefined,
-      };
-    });
+
+    return (data ?? []).map(mapNotification);
   } catch {
     return [];
   }
@@ -311,5 +340,118 @@ export async function getTeam(): Promise<TeamData> {
     return { members };
   } catch {
     return { members: seed.teamMembers };
+  }
+}
+
+/* ---------- general discussion ---------- */
+
+/** A writer, flattened the way the thread components want it. Falls back to a
+ *  placeholder rather than dropping the entry: a reply whose author's profile
+ *  is gone is still something somebody said. */
+function writer(row: any): { author: string; authorId: string | null; authorInitial: string } {
+  const p = one<any>(row?.author);
+  const name = p?.name ?? "Someone";
+  return {
+    author: name,
+    authorId: row?.author_id ?? null,
+    authorInitial: p?.initial ?? name.charAt(0).toUpperCase(),
+  };
+}
+
+/** Everyone who has written in a thread, starter first, then in the order they
+ *  joined. Deduped by id, so a stack of three founders never shows six faces. */
+function participantsOf(topic: any, replies: any[]): Founder[] {
+  const seen = new Set<string>();
+  const out: Founder[] = [];
+  for (const row of [topic, ...replies]) {
+    const p = one<any>(row.author);
+    const id = row.author_id;
+    if (!p || !id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: p.name, initial: p.initial });
+  }
+  return out;
+}
+
+const TOPIC_COLUMNS =
+  "id, title, description, state, created_at, last_activity_at, author_id, " +
+  "author:profiles(name, initial)";
+
+const REPLY_COLUMNS =
+  "id, topic_id, body, created_at, author_id, author:profiles(name, initial)";
+
+function mapTopic(row: any, replies: any[]): Topic {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? undefined,
+    state: row.state === "inactive" ? "inactive" : "active",
+    ...writer(row),
+    createdAt: row.created_at,
+    lastActivityAt: row.last_activity_at ?? row.created_at,
+    replyCount: replies.length,
+    participants: participantsOf(row, replies),
+  };
+}
+
+/** Every topic, liveliest first. Replies are fetched in one go and grouped in
+ *  memory — with three founders the whole table is smaller than the round trip
+ *  it would take to count them per topic. */
+export async function getTopics(): Promise<Topic[]> {
+  const db = supabaseAdmin();
+  try {
+    if (!db) throw new Error("no-db");
+    const [{ data: topics, error }, { data: replies }] = await Promise.all([
+      db
+        .from("topics")
+        .select(TOPIC_COLUMNS)
+        .order("last_activity_at", { ascending: false }),
+      db.from("topic_replies").select(REPLY_COLUMNS).order("created_at", { ascending: true }),
+    ]);
+    if (error || !topics) throw error ?? new Error("empty");
+
+    const byTopic = new Map<string, any[]>();
+    for (const r of replies ?? []) {
+      const list = byTopic.get(r.topic_id);
+      if (list) list.push(r);
+      else byTopic.set(r.topic_id, [r]);
+    }
+    return topics.map((t: any) => mapTopic(t, byTopic.get(t.id) ?? []));
+  } catch {
+    return seed.topics;
+  }
+}
+
+/** One topic and its whole thread. Null when there's no such topic — the page
+ *  turns that into a redirect rather than an empty shell. */
+export async function getTopicDetail(id: string): Promise<TopicDetail | null> {
+  const db = supabaseAdmin();
+  try {
+    if (!db) throw new Error("no-db");
+    const [{ data: topic, error }, { data: replies }] = await Promise.all([
+      db.from("topics").select(TOPIC_COLUMNS).eq("id", id).single(),
+      db
+        .from("topic_replies")
+        .select(REPLY_COLUMNS)
+        .eq("topic_id", id)
+        .order("created_at", { ascending: true }),
+    ]);
+    // Thrown rather than returned, so a missing row and a missing table take
+    // the same path as getTopics: try the seed, and only then give up. Without
+    // that, an un-migrated database lists seeded topics that 404 on click.
+    if (error || !topic) throw error ?? new Error("no-topic");
+
+    const rows = replies ?? [];
+    return {
+      ...mapTopic(topic, rows),
+      replies: rows.map((r: any) => ({
+        id: r.id,
+        body: r.body,
+        createdAt: r.created_at,
+        ...writer(r),
+      })),
+    };
+  } catch {
+    return seed.topics.find((t) => t.id === id) ?? null;
   }
 }

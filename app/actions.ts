@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { CURRENT_USER } from "@/lib/constants";
 import { getCurrentUserId } from "@/lib/session";
 import { getNotifications, type AppNotification } from "@/lib/data";
-import type { ItemType, TaskState } from "@/lib/types";
+import type { ItemType, TaskState, TopicState } from "@/lib/types";
 
 export interface ActionResult {
   ok: boolean;
@@ -619,3 +619,129 @@ export async function clearNotifications(): Promise<ActionResult> {
 }
 
 // (markShipped removed — completion is unified in completeTask above.)
+
+/* ---------- general discussion ---------- */
+
+/** Both discussion surfaces move together: the list shows each topic's reply
+ *  count and last activity, so writing in a thread changes the list too. */
+function revalidateDiscuss() {
+  revalidatePath("/discuss");
+  revalidatePath("/discuss/[id]", "page");
+}
+
+/** Tell the rest of the team. A topic has no assignees to scope this by — it's
+ *  addressed to the team by definition, so everyone but the writer hears about
+ *  it.
+ *
+ *  Best-effort, like the comment fan-out: something that saved must not report
+ *  failure because notifying people about it didn't. */
+async function notifyTopic(
+  db: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  topicId: string,
+  type: "topic" | "topic_reply",
+  body: string,
+  authorId: string
+) {
+  try {
+    const { data: people } = await db.from("profiles").select("id");
+    const recipients = (people ?? [])
+      .map((p: any) => p.id as string)
+      .filter((id) => id !== authorId);
+    if (recipients.length === 0) return;
+
+    // One live row per thread per person, same as task discussions: five
+    // replies overnight should read as one conversation to catch up on, not
+    // five things to dismiss. A new topic is its own event and never collapses.
+    if (type === "topic_reply") {
+      await db
+        .from("notifications")
+        .delete()
+        .in("recipient_id", recipients)
+        .eq("topic_id", topicId)
+        .eq("type", "topic_reply");
+    }
+
+    await db.from("notifications").insert(
+      recipients.map((id) => ({
+        recipient_id: id,
+        actor_id: authorId,
+        type,
+        topic_id: topicId,
+        task_id: null,
+        body,
+      }))
+    );
+  } catch {
+    // Swallowed on purpose — see the doc comment above.
+  }
+}
+
+/** Start a topic. Title carries it; the description is where the thinking goes,
+ *  and is optional because "quick question:" is a legitimate whole post.
+ *  Returns the id so the caller can open the thread straight away. */
+export async function createTopic(
+  title: string,
+  description?: string
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const trimmed = title.trim();
+  if (!trimmed) return { ok: false, error: "Give it a title" };
+
+  const me = await currentUid();
+  const { data, error } = await db
+    .from("topics")
+    .insert({
+      author_id: me,
+      title: trimmed,
+      description: description?.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: friendlyError(error) };
+
+  if (data?.id) await notifyTopic(db, data.id, "topic", description?.trim() ?? "", me);
+  revalidateDiscuss();
+  return { ok: true, id: data?.id };
+}
+
+/** Write in a topic's thread. Allowed whatever the topic's state — see
+ *  `setTopicState`. */
+export async function addTopicReply(
+  topicId: string,
+  body: string
+): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, error: "Nothing to post" };
+
+  const me = await currentUid();
+  const { error } = await db
+    .from("topic_replies")
+    .insert({ topic_id: topicId, author_id: me, body: trimmed });
+  if (error) return { ok: false, error: friendlyError(error) };
+
+  await notifyTopic(db, topicId, "topic_reply", trimmed, me);
+  revalidateDiscuss();
+  return { ok: true };
+}
+
+/** Flip a topic between Active and Inactive. Anyone can, at any time, in either
+ *  direction — it says whether this is a live conversation, and that is a
+ *  judgement the whole team shares rather than the starter's to own.
+ *
+ *  Deliberately not a lock: an inactive topic still accepts replies. Making
+ *  people reactivate a thread before answering in it would cost more than the
+ *  tidiness is worth. */
+export async function setTopicState(
+  topicId: string,
+  state: TopicState
+): Promise<ActionResult> {
+  const db = supabaseAdmin();
+  if (!db) return { ok: false, error: "Supabase not configured" };
+  const { error } = await db.from("topics").update({ state }).eq("id", topicId);
+  if (error) return { ok: false, error: friendlyError(error) };
+  revalidateDiscuss();
+  return { ok: true };
+}
