@@ -1,45 +1,57 @@
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 import { timeAgo } from "@/lib/relative-time";
-import TopicStateToggle from "./TopicStateToggle";
+import TopicStateSelect from "./TopicStateSelect";
 import type { Topic } from "@/lib/types";
 
-/** One row in the Discuss list.
+/** One tile in the Discuss grid.
  *
- *  Reads top-down as: what it's about, what was said, who's in it and how warm
- *  it is. The reply count and the last-activity stamp sit together at the
- *  bottom because they answer the same question — is there something here for
- *  me — and separating them would make the reader assemble it themselves.
+ *  Reads top-down: what it's about, who raised it and when, then as much of the
+ *  thinking as fits. The footer is the bit you act on — who's in it, how busy
+ *  it is, and the control that changes its state.
  *
- *  The state toggle is a sibling of the link rather than nested inside it: a
- *  button inside an anchor is invalid, and reserving the space with padding
- *  keeps the title from ever running under it. */
+ *  Splitting the footer out from the link does two jobs at once: a button can't
+ *  legally nest inside an anchor, and the hairline makes the state control read
+ *  as its own affordance rather than part of the thing you click to open.
+ *
+ *  Sized to its content, not stretched to the row (the grid sets `items-start`
+ *  for this). Forcing every card to the height of the tallest one in its row
+ *  gives a title-only topic a void where its description would be, which reads
+ *  as a rendering fault rather than as brevity. */
 export default function TopicCard({ topic }: { topic: Topic }) {
   const active = topic.state === "active";
-  const replies = topic.replyCount;
 
   return (
-    <div className="relative rounded-card border border-hair bg-surface transition-colors duration-quick hover:border-hair-strong">
+    <article className="flex flex-col rounded-card border border-hair bg-surface transition-colors duration-quick hover:border-hair-strong">
       <Link
         href={`/discuss/${topic.id}`}
-        className="block rounded-card px-4 py-3.5 pr-24 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+        className="flex flex-col rounded-t-card px-4 pb-3 pt-3.5 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
         <h2
-          className={`text-[14px] font-medium leading-snug ${
+          className={`line-clamp-2 text-[14px] font-medium leading-snug ${
             active ? "text-ink" : "text-ink-2"
           }`}
         >
           {topic.title}
         </h2>
 
+        <p className="mt-1 text-[11px] text-ink-3">
+          <span className="text-ink-2">{topic.author}</span>
+          <span aria-hidden="true"> · </span>
+          {timeAgo(topic.lastActivityAt)}
+        </p>
+
         {topic.description && (
-          <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-ink-2">
+          <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed text-ink-2">
             {topic.description}
           </p>
         )}
+      </Link>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex items-center justify-between gap-2 border-t border-hair px-3 py-2">
+        <span className="flex min-w-0 items-center gap-2">
           {/* Overlapping so the group reads as one object — "these people",
-              not a list of three separate facts. */}
+              not a list of separate facts. */}
           <span className="flex -space-x-1.5" aria-hidden="true">
             {topic.participants.slice(0, 4).map((p) => (
               <span
@@ -50,19 +62,17 @@ export default function TopicCard({ topic }: { topic: Topic }) {
               </span>
             ))}
           </span>
-          <span className="text-ink-2">{topic.author}</span>
-          <span aria-hidden="true">·</span>
-          <span className="tabular-nums">
-            {replies === 0 ? "No replies yet" : `${replies} ${replies === 1 ? "reply" : "replies"}`}
+          <span className="flex items-center gap-1 text-[11px] text-ink-3">
+            <MessageSquare aria-hidden="true" className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{topic.replyCount}</span>
+            <span className="sr-only">
+              {topic.replyCount === 1 ? "reply" : "replies"}
+            </span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>{timeAgo(topic.lastActivityAt)}</span>
-        </div>
-      </Link>
+        </span>
 
-      <div className="absolute right-2.5 top-2.5">
-        <TopicStateToggle topicId={topic.id} state={topic.state} />
+        <TopicStateSelect topicId={topic.id} state={topic.state} />
       </div>
-    </div>
+    </article>
   );
 }

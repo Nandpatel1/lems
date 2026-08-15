@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { getTopicDetail, getCurrentProfile } from "@/lib/data";
 import { getCurrentUserId } from "@/lib/session";
 import { shortDate } from "@/lib/relative-time";
-import TopicStateToggle from "@/components/TopicStateToggle";
+import TopicStateSelect from "@/components/TopicStateSelect";
 import TopicThread from "@/components/TopicThread";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,7 @@ export default async function TopicPage({
             {topic.title}
           </h1>
           <div className="pt-0.5">
-            <TopicStateToggle topicId={topic.id} state={topic.state} size="md" />
+            <TopicStateSelect topicId={topic.id} state={topic.state} size="md" />
           </div>
         </div>
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-3">

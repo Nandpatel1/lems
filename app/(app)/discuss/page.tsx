@@ -41,7 +41,13 @@ export default async function DiscussPage() {
               Nothing active right now. Everything below has been set aside.
             </p>
           ) : (
-            active.map((t) => <TopicCard key={t.id} topic={t} />)
+            // Same column rhythm as the Team board, so the two grids in this
+            // app read as one system rather than two ideas about width.
+            <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {active.map((t) => (
+                <TopicCard key={t.id} topic={t} />
+              ))}
+            </div>
           )}
 
           {/* Set aside, not filed away: collapsed so it doesn't compete with
@@ -58,7 +64,7 @@ export default async function DiscussPage() {
                   · {inactive.length}
                 </span>
               </summary>
-              <div className="mt-2 flex flex-col gap-3">
+              <div className="mt-2 grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {inactive.map((t) => (
                   <TopicCard key={t.id} topic={t} />
                 ))}
