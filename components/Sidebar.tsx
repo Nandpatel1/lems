@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Rocket, Plus, LogOut } from "lucide-react";
+import { Rocket, LogOut } from "lucide-react";
 import { navItems } from "./nav-items";
 import ThemeToggle from "./ThemeToggle";
 import NotificationsBell from "./NotificationsBell";
@@ -62,13 +62,6 @@ export default function Sidebar({ currentName }: { currentName?: string }) {
           );
         })}
       </nav>
-
-      <Link
-        href="/library"
-        className="mt-3 flex items-center justify-center gap-1.5 rounded-control bg-accent px-3 py-2 text-[13px] font-medium text-white transition-transform duration-quick active:scale-[0.98]"
-      >
-        <Plus className="h-[15px] w-[15px]" /> Add
-      </Link>
 
       <div className="mt-auto flex items-center justify-between gap-2 px-1 pt-3">
         <span className="min-w-0 truncate text-[11px] text-ink-3">
