@@ -61,6 +61,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Rendered markdown. Everything else is mapped to tokens on the element itself
+   in components/Markdown.tsx; this needs a descendant selector, because the
+   `code` inside a fenced block is styled by the block around it, not by the
+   inline-code pill it would otherwise inherit. */
+.md pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
 /* Detail pane settling into a new state. Restrained on purpose — a 4px lift,
    no overshoot; nothing here should feel like a bigger deal than shipping. */
 @keyframes pane-in {

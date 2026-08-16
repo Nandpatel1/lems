@@ -8,7 +8,6 @@ export interface Task {
   title: string;
   type: ItemType;
   state: TaskState;
-  source?: string;
   deadline?: string;
   overdue?: boolean;
   applied?: boolean;
@@ -38,9 +37,12 @@ export interface Resource {
   id: string;
   title: string;
   type: ItemType;
-  source?: string;
   tags: string[];
   effortMin?: number;
+  /** Markdown. The resource's whole body: the link, the context, what to focus
+   *  on. It replaced a separate `source` field — where a resource lives is read
+   *  back off the first link in here (see `lib/markdown.ts`) rather than typed
+   *  into a box of its own. */
   description?: string;
 }
 

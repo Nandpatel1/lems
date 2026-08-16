@@ -166,7 +166,7 @@ export interface NewResource {
   title: string;
   type: ItemType;
   folderId?: string | null;
-  source?: string;
+  /** Markdown. Everything a resource is beyond its name — link included. */
   description?: string;
 }
 
@@ -218,7 +218,6 @@ export async function addResource(input: NewResource): Promise<ActionResult> {
     title: input.title.trim(),
     type: input.type ?? "learn",
     folder_id: input.folderId,
-    source: input.source?.trim() || null,
     description: input.description?.trim() || null,
   });
   if (error) return { ok: false, error: friendlyError(error) };
@@ -238,7 +237,7 @@ export async function assignResourceToMember(
 
   const { data: r, error } = await db
     .from("resources")
-    .select("id, title, type, source, folder_id")
+    .select("id, title, type, folder_id")
     .eq("id", resourceId)
     .single();
   if (error || !r)
@@ -255,7 +254,6 @@ export async function assignResourceToMember(
         resource_id: r.id,
         title: r.title,
         type: r.type,
-        source: r.source,
         folder_id: r.folder_id,
         state: "todo",
         deadline: deadline || null,
@@ -286,7 +284,7 @@ export async function assignFolderToMember(
     db.from("folders").select("name").eq("id", folderId).single(),
     db
       .from("resources")
-      .select("id, title, type, source, folder_id")
+      .select("id, title, type, folder_id")
       .eq("folder_id", folderId),
   ]);
   if (error) return { ok: false, error: error.message };
@@ -302,7 +300,6 @@ export async function assignFolderToMember(
         resource_id: r.id,
         title: r.title,
         type: r.type,
-        source: r.source,
         folder_id: r.folder_id,
         state: "todo",
         deadline: deadline || null,
@@ -330,7 +327,9 @@ export async function assignFolderToMember(
   return { ok: true };
 }
 
-/** Save the free-form details on a library resource. */
+/** Save the markdown details on a library resource. Stored verbatim — the
+ *  renderer refuses raw HTML, so there is nothing to strip on the way in and
+ *  what someone typed is what they get back when they reopen it to edit. */
 export async function saveResourceDescription(
   resourceId: string,
   description: string

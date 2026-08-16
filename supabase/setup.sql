@@ -42,7 +42,10 @@ create table resources (
   folder_id uuid not null references folders(id) on delete cascade,
   title text not null,
   type item_type not null default 'learn',
-  source text,
+  -- Markdown. The resource's whole body: the link, the context, what to focus
+  -- on. There is deliberately no separate `source` column — where a resource
+  -- lives is read off the first link in here (lib/markdown.ts), so nobody has
+  -- to type "YouTube" into a box to say what the URL already says.
   description text,
   tags text[] not null default '{}',
   est_effort_min int
@@ -61,7 +64,7 @@ create table milestones (
 -- "ad-hoc task" escape hatch. Delete the resource (or its folder) and the task
 -- goes with it in the same statement.
 --
--- Resource-owned columns (kept in sync by trigger): title, type, source, folder_id.
+-- Resource-owned columns (kept in sync by trigger): title, type, folder_id.
 -- Task-owned columns: state, deadline, note, applied, effort_min, parked_reason.
 create table tasks (
   id uuid primary key default gen_random_uuid(),
@@ -71,7 +74,6 @@ create table tasks (
   title text not null,
   type item_type not null default 'learn',
   state task_state not null default 'todo',
-  source text,
   deadline timestamptz,
   applied boolean not null default false,
   parked_reason text,
@@ -184,7 +186,7 @@ begin
       using errcode = 'not_null_violation';
   end if;
 
-  select title, type, source, folder_id into r
+  select title, type, folder_id into r
   from resources where id = new.resource_id;
 
   if not found then
@@ -196,13 +198,12 @@ begin
 
   new.title     := r.title;
   new.type      := r.type;
-  new.source    := r.source;
   new.folder_id := r.folder_id;
   return new;
 end $$;
 
 create trigger tasks_sync_from_resource
-  before insert or update of resource_id, title, type, source, folder_id on tasks
+  before insert or update of resource_id, title, type, folder_id on tasks
   for each row execute function tasks_sync_from_resource();
 
 create or replace function resources_sync_tasks() returns trigger
@@ -211,18 +212,16 @@ begin
   update tasks
   set title     = new.title,
       type      = new.type,
-      source    = new.source,
       folder_id = new.folder_id
   where resource_id = new.id;
   return null;
 end $$;
 
 create trigger resources_sync_tasks
-  after update of title, type, source, folder_id on resources
+  after update of title, type, folder_id on resources
   for each row
   when (old.title     is distinct from new.title
      or old.type      is distinct from new.type
-     or old.source    is distinct from new.source
      or old.folder_id is distinct from new.folder_id)
   execute function resources_sync_tasks();
 
@@ -239,19 +238,37 @@ insert into folders (id, name, ordered) values
   ('00000000-0000-0000-0000-0000000000a4','Paid ads',false),
   ('00000000-0000-0000-0000-0000000000a5','Brand & copy',false);
 
-insert into resources (id, folder_id, title, type, source, tags, est_effort_min) values
-  ('00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-0000000000a1','Cold email fundamentals — playlist','learn','YouTube','{email,outreach}',120),
-  ('00000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-0000000000a1','Send 10 real cold emails','build',null,'{email,practice}',60),
-  ('00000000-0000-0000-0000-0000000000b3','00000000-0000-0000-0000-0000000000a2','SEO foundations','learn','Course','{seo,organic}',240),
-  ('00000000-0000-0000-0000-0000000000b4','00000000-0000-0000-0000-0000000000a2','Keyword research walkthrough','learn','Blog','{seo}',30),
-  ('00000000-0000-0000-0000-0000000000b5','00000000-0000-0000-0000-0000000000a3','Ship our brand logo — v1','build',null,'{brand,launch}',90),
+-- `description` is markdown: the link and the context live in one field, and
+-- the app reads the site off the first link rather than storing it separately.
+insert into resources (id, folder_id, title, type, description, tags, est_effort_min) values
+  ('00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-0000000000a1','Cold email fundamentals — playlist','learn',
+   E'[8-part playlist on cold outreach](https://www.youtube.com/playlist?list=PLcold-email)\n\nSkip parts 1–2, they''re intro fluff. **Part 3 (subject lines)** and **part 6 (follow-up cadence)** are the ones we actually need.\n\n- [ ] Watch parts 3–8\n- [ ] Pull the templates into our shared doc',
+   '{email,outreach}',120),
+  ('00000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-0000000000a1','Send 10 real cold emails','build',
+   E'Ten real sends, not drafts. Use the templates from the playlist, but rewrite the first line per prospect — the whole point is that it doesn''t read like a template.',
+   '{email,practice}',60),
+  ('00000000-0000-0000-0000-0000000000b3','00000000-0000-0000-0000-0000000000a2','SEO foundations','learn',
+   E'Full course: https://www.ahrefs.com/academy/seo-foundations\n\nSeven modules, ~4 hours. Do it in two sittings rather than one — the back half only lands once the first half has had a day to settle.',
+   '{seo,organic}',240),
+  ('00000000-0000-0000-0000-0000000000b4','00000000-0000-0000-0000-0000000000a2','Keyword research walkthrough','learn',
+   E'[The one good walkthrough](https://backlinko.com/keyword-research) — everything else on page one of Google is the same post rewritten.',
+   '{seo}',30),
+  ('00000000-0000-0000-0000-0000000000b5','00000000-0000-0000-0000-0000000000a3','Ship our brand logo — v1','build',
+   E'**v1, not the final word.** Something we can put on a deck and a footer this week.\n\n- [ ] Three directions, black on white\n- [ ] Pick one together on Thursday\n- [ ] Export SVG + PNG to the shared drive',
+   '{brand,launch}',90),
   ('00000000-0000-0000-0000-0000000000b6','00000000-0000-0000-0000-0000000000a3','Set up our Instagram page','build',null,'{socials,launch}',null),
-  ('00000000-0000-0000-0000-0000000000b7','00000000-0000-0000-0000-0000000000a2','SEO audit of our site','build',null,'{seo,audit}',null),
+  ('00000000-0000-0000-0000-0000000000b7','00000000-0000-0000-0000-0000000000a2','SEO audit of our site','build',
+   E'Run it with the free [Ahrefs site audit](https://ahrefs.com/site-audit). We only care about three things right now:\n\n1. Pages that return anything but 200\n2. Missing or duplicate titles\n3. Anything blocking indexing',
+   '{seo,audit}',null),
   ('00000000-0000-0000-0000-0000000000b8','00000000-0000-0000-0000-0000000000a2','On-page checklist','build',null,'{seo}',null),
-  ('00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000a4','Advanced Meta Ads course','learn',null,'{ads,meta}',null),
+  ('00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000a4','Advanced Meta Ads course','learn',
+   E'Parked until the first test campaign has real numbers — the course assumes you have data to read.',
+   '{ads,meta}',null),
   ('00000000-0000-0000-0000-0000000000c2','00000000-0000-0000-0000-0000000000a4','Audience research','learn',null,'{ads,research}',null),
   ('00000000-0000-0000-0000-0000000000c3','00000000-0000-0000-0000-0000000000a4','Creative hooks','learn',null,'{ads,creative}',null),
-  ('00000000-0000-0000-0000-0000000000c4','00000000-0000-0000-0000-0000000000a4','Meta Ads test campaign','build',null,'{ads,practice}',null),
+  ('00000000-0000-0000-0000-0000000000c4','00000000-0000-0000-0000-0000000000a4','Meta Ads test campaign','build',
+   E'Small budget, one variable. **₹500/day for five days**, one audience, three creatives — anything wider than that and we learn nothing.',
+   '{ads,practice}',null),
   ('00000000-0000-0000-0000-0000000000c5','00000000-0000-0000-0000-0000000000a4','First test ad set','build',null,'{ads,practice}',null),
   ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000a5','Positioning basics','learn',null,'{brand,positioning}',null),
   ('00000000-0000-0000-0000-0000000000d2','00000000-0000-0000-0000-0000000000a5','Offer design','learn',null,'{offer}',null),
@@ -267,9 +284,9 @@ insert into milestones (id, label, idx, done, current) values
   ('content','content',3,false,false),
   ('sales','sales team',4,false,false);
 
--- Every task is a library resource assigned to someone. title, type, source
--- and folder_id are filled in from resource_id by the sync trigger, so the
--- values below only need to be plausible — the resource is authoritative.
+-- Every task is a library resource assigned to someone. title, type and
+-- folder_id are filled in from resource_id by the sync trigger, so the values
+-- below only need to be plausible — the resource is authoritative.
 
 -- Nand's active queue
 insert into tasks (owner_id, resource_id, title, type, state, deadline, is_folder, children_done, children_total, effort_min, note, parked_reason) values

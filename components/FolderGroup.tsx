@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Folder, FolderOpen, ChevronRight, ExternalLink, FileText, Trash2 } from "lucide-react";
+import { Folder, FolderOpen, ChevronRight, Link2, Trash2 } from "lucide-react";
 import type { LibraryFolder, Resource } from "@/lib/types";
+import { plainExcerpt, sourceDomain } from "@/lib/markdown";
 import AssignControl from "./AssignControl";
 import TypeChip from "./TypeChip";
 import ResourceDetailModal from "./ResourceDetailModal";
@@ -60,7 +61,9 @@ export default function FolderGroup({
         )}
         <span className="text-[14px] font-medium text-ink">{folder.name}</span>
         <span className="ml-auto flex items-center gap-3">
-          <span className="text-[12px] text-ink-3">{folder.resources.length} items</span>
+          <span className="text-[12px] text-ink-3">
+            {folder.resources.length} {folder.resources.length === 1 ? "item" : "items"}
+          </span>
           <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <AssignControl
               members={members}
@@ -86,50 +89,13 @@ export default function FolderGroup({
             <p className="px-4 py-4 text-[12px] text-ink-3">No resources in this folder yet.</p>
           ) : (
             folder.resources.map((r) => (
-              <div
+              <ResourceRow
                 key={r.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setDetail(r)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setDetail(r);
-                }}
-                className="flex cursor-pointer items-center gap-3 border-b border-hair px-4 py-3 transition-colors duration-quick last:border-b-0 hover:bg-surface-soft"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] text-ink">{r.title}</p>
-                  {/* On the meta line rather than beside the title: this line
-                      already wraps by design, so the chip can never push the
-                      title into a truncation it wouldn't otherwise need. */}
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
-                    <TypeChip type={r.type} />
-                    {r.source && (
-                      <span className="inline-flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" /> {r.source}
-                      </span>
-                    )}
-                    {r.description && (
-                      <span className="inline-flex items-center gap-1 text-accent-ink">
-                        <FileText className="h-3 w-3" /> details
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  <AssignControl
-                    members={members}
-                    heading={`Assign "${r.title}"`}
-                    onAssign={(o, d) => assignResourceToMember(r.id, o, d)}
-                  />
-                  <button
-                    onClick={() => setConfirmResource(r)}
-                    aria-label="Delete resource"
-                    className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              </div>
+                resource={r}
+                members={members}
+                onOpen={() => setDetail(r)}
+                onDelete={() => setConfirmResource(r)}
+              />
             ))
           )}
         </div>
@@ -159,6 +125,78 @@ export default function FolderGroup({
         />
       )}
     </section>
+  );
+}
+
+/** A row says what the thing is, then what's in it.
+ *
+ *  It used to end at a badge reading "details" — a row telling you there is
+ *  something to read without telling you any of it, which is the worst of both:
+ *  it costs a line and buys a click. Now the details themselves show, flattened
+ *  to one line, and the site the resource points at is read off the first link
+ *  in that text instead of a hand-typed "Source". Rows with nothing written
+ *  about them stay two lines tall, so the list still reads as a list. */
+function ResourceRow({
+  resource: r,
+  members,
+  onOpen,
+  onDelete,
+}: {
+  resource: Resource;
+  members: Member[];
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const excerpt = plainExcerpt(r.description, 120);
+  const domain = sourceDomain(r.description);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onOpen();
+      }}
+      className="flex cursor-pointer items-center gap-3 border-b border-hair px-4 py-3 transition-colors duration-quick last:border-b-0 hover:bg-surface-soft"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] text-ink">{r.title}</p>
+        {excerpt && (
+          <p className="mt-0.5 truncate text-[12px] leading-relaxed text-ink-2">{excerpt}</p>
+        )}
+        {/* Chips sit under the prose rather than between it and the title, so
+            the two lines of text stay a single block the eye can read
+            straight through. This line wraps by design, which is also why the
+            type chip lives here and can never squeeze the title. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
+          <TypeChip type={r.type} />
+          {domain && (
+            // Deliberately not a link. The row is already one big target, and
+            // an anchor nested inside it is a trap for keyboard and screen
+            // reader alike — the live link is in the details, one click in.
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <Link2 className="h-3 w-3 shrink-0" />
+              <span className="truncate">{domain}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <AssignControl
+          members={members}
+          heading={`Assign "${r.title}"`}
+          onAssign={(o, d) => assignResourceToMember(r.id, o, d)}
+        />
+        <button
+          onClick={onDelete}
+          aria-label="Delete resource"
+          className="grid h-7 w-7 place-items-center rounded-chip border border-hair-strong bg-surface text-ink-3 transition-colors duration-quick hover:border-danger hover:bg-danger-tint hover:text-danger-ink"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </span>
+    </div>
   );
 }
 

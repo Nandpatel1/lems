@@ -43,6 +43,7 @@ docs/            # discovery, design, and engineering artifacts
 - **Path alias `@/*`** maps to project root. Use `@/lib/...`, `@/components/...`.
 - **No barrel exports.** Import directly from the component file.
 - **Icon library: `lucide-react`.** Don't add other icon packages.
+- **Resource details are markdown.** `resources.description` is the only free-text field on a resource — there is no separate `source` column. Render it with `components/Markdown.tsx` (react-markdown + remark-gfm, no `rehype-raw`, so raw HTML stays inert), edit it with `components/MarkdownEditor.tsx`, and derive previews or the site chip with `lib/markdown.ts`.
 - **Session:** A `lems_uid` cookie identifies the current founder. No real auth yet.
 
 ## Database

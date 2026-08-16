@@ -6,12 +6,30 @@ import { addResource, createFolder } from "@/app/actions";
 import { TYPE_OPTIONS, composeType, type BaseType } from "./TypeChip";
 import Select from "./Select";
 import Modal from "./Modal";
+import MarkdownEditor from "./MarkdownEditor";
 
 type FolderOpt = { id: string; name: string };
 
+/** Models the shape of good details — a link, then what to do with it — rather
+ *  than demonstrating syntax. The toolbar is what says "markdown"; a
+ *  placeholder full of asterisks would only teach people to type asterisks. */
+const DETAILS_PLACEHOLDER = `Paste the link, then say what matters about it.
+
+https://youtube.com/watch?v=…
+
+- First 20 minutes is the useful part
+- Steal the templates, not the script`;
+
 /** Capture only. Assigning an owner and a deadline is a separate, deliberate
  *  step on the resource once it exists (see AssignControl), so this form stays
- *  about *what* the thing is, not who has to do it. */
+ *  about *what* the thing is, not who has to do it.
+ *
+ *  There used to be a separate "Source" box next to Details, which asked for a
+ *  word like "YouTube" — a field that cost a decision and returned almost
+ *  nothing, while the link people actually wanted to paste went into Details
+ *  anyway. Details absorbed it: it's markdown now, so a pasted link renders as
+ *  a link, and where the resource lives is read back off that link rather than
+ *  typed a second time. One field, doing more than the two it replaced. */
 export default function AddResource({ folders }: { folders: FolderOpt[] }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -25,7 +43,6 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
    *  form asks what the thing *is*, not which of three boxes it fits in. */
   const [types, setTypes] = useState<BaseType[]>(["learn"]);
   const [folderId, setFolderId] = useState<string>(folders[0]?.id ?? "");
-  const [source, setSource] = useState("");
   const [description, setDescription] = useState("");
 
   const [newFolderMode, setNewFolderMode] = useState(false);
@@ -36,7 +53,6 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
     setTitle("");
     setTypes(["learn"]);
     setFolderId(folders[0]?.id ?? "");
-    setSource("");
     setDescription("");
     setError(null);
     setNewFolderMode(false);
@@ -86,7 +102,6 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
         title,
         type: composeType(types),
         folderId,
-        source,
         description,
       });
       if (res.ok) {
@@ -108,7 +123,17 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
       </button>
 
       {open && (
-        <Modal title="Add a resource" onClose={() => setOpen(false)} onEnter={submit}>
+        <Modal
+          title="Add a resource"
+          maxWidth="max-w-lg"
+          onClose={() => setOpen(false)}
+          onEnter={submit}
+        >
+          {/* The fields scroll; the decision to save doesn't. Details can grow
+              tall now, and a Save button that drifts below the fold is a Save
+              button people stop finding. The negative margin puts the
+              scrollbar on the card's edge rather than inside the text. */}
+          <div className="-mx-5 min-h-0 flex-1 overflow-y-auto px-5">
           <label className="block text-[11px] text-ink-3">Title</label>
           <input
             value={title}
@@ -243,30 +268,30 @@ export default function AddResource({ folders }: { folders: FolderOpt[] }) {
             {folderError && <p className="mt-1 text-[11px] text-warm-ink">{folderError}</p>}
           </div>
 
-          <label className="mt-3 block text-[11px] text-ink-3">Source</label>
-          <input
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="YouTube, Blog…"
-            className="mt-1 w-full rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-          />
+          {/* Last, and the largest thing on the form — the only field here
+              that carries the actual substance of a resource. */}
+          <div className="mt-4">
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <label className="text-[11px] text-ink-3">Details</label>
+              <span className="text-[11px] text-ink-3">Optional</span>
+            </div>
+            <MarkdownEditor
+              value={description}
+              onChange={setDescription}
+              minRows={5}
+              placeholder={DETAILS_PLACEHOLDER}
+              onSubmit={submit}
+            />
+          </div>
 
-          <label className="mt-3 block text-[11px] text-ink-3">Details (optional)</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Context, links, what to focus on…"
-            className="mt-1 w-full resize-none rounded-control border border-hair bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-          />
-
-          <p className="mt-3 text-[11px] text-ink-3">
+          <p className="mt-4 text-[11px] text-ink-3">
             Lands in the Library. Assign it to someone — with a deadline — from there.
           </p>
 
           {error && <p className="mt-3 text-[12px] text-warm-ink">{error}</p>}
+          </div>
 
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-hair pt-4">
             <button
               onClick={() => setOpen(false)}
               className="rounded-control border border-hair px-4 py-2 text-[13px] text-ink-2 hover:bg-surface-soft"
