@@ -246,11 +246,10 @@ export default function MarkdownEditor({
                   disabled={disabled}
                   title={disabled ? "Nothing to preview yet" : undefined}
                   onClick={() => setMode(m)}
-                  className={`rounded-[5px] px-2 py-0.5 text-[11px] transition-colors duration-quick disabled:opacity-40 ${
-                    on
+                  className={`rounded-[5px] px-2 py-0.5 text-[11px] transition-colors duration-quick disabled:opacity-40 ${on
                       ? "bg-accent-tint font-medium text-accent-ink"
                       : "text-ink-3 hover:text-ink"
-                  }`}
+                    }`}
                 >
                   {m === "write" ? "Write" : "Preview"}
                 </button>
@@ -284,9 +283,9 @@ export default function MarkdownEditor({
         )}
       </div>
 
-      <p className="mt-1.5 text-[11px] leading-normal text-ink-3">
+      {/* <p className="mt-1.5 text-[11px] leading-normal text-ink-3">
         Markdown supported. Paste a link onto selected text to turn it into a link.
-      </p>
+      </p> */}
     </div>
   );
 }
